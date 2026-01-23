@@ -20,12 +20,12 @@ import os
 import sys
 
 ANDROID_NDK_ENVVARS = ['ANDROID_NDK_HOME', 'ANDROID_NDK']
-ANDROID_NDK_SUPPORTED = [10, 19, 20]
+ANDROID_NDK_SUPPORTED = [10, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
 ANDROID_NDK_HARDFP_MAX = 11 # latest version that supports hardfp
 ANDROID_NDK_GCC_MAX = 17 # latest NDK that ships with GCC
 ANDROID_NDK_UNIFIED_SYSROOT_MIN = 15
 ANDROID_NDK_SYSROOT_FLAG_MAX = 19 # latest NDK that need --sysroot flag
-ANDROID_NDK_API_MIN = { 10: 3, 19: 16, 20: 16 } # minimal API level ndk revision supports
+ANDROID_NDK_API_MIN = { 10: 3, 19: 16, 20: 16, 21: 21, 22: 21, 23: 21, 24: 21, 25: 21, 26: 21, 27: 21, 28: 21, 29: 21 } # minimal API level ndk revision supports
 ANDROID_64BIT_API_MIN = 21 # minimal API level that supports 64-bit targets
 
 # This class does support ONLY r10e and r19c/r20 NDK
@@ -141,6 +141,11 @@ class Android:
 				return 'arm-linux-androideabi'
 		elif self.is_amd64() and toolchain_folder:
 			return 'x86_64'
+		elif self.is_arm64():
+			if llvm_toolchain:
+				return 'aarch64-linux-android'
+			else:
+				return 'aarch64-linux-android'
 		else:
 			return self.arch + '-linux-android'
 
@@ -160,15 +165,29 @@ class Android:
 		elif sys.platform.startswith('darwin'):
 			osname = 'darwin'
 		elif sys.platform.startswith('linux'):
-			osname = 'linux'
+			if os.path.exists('/system/bin/reboot'): # Simple check for Android
+				osname = 'linux-android' if self.ndk_rev < 23 else 'android'
+			else:
+				osname = 'linux'
 		else:
 			self.ctx.fatal('Unsupported by NDK host platform')
 
 		if sys.maxsize > 2**32:
-			arch = 'x86_64'
+			import platform
+			machine = platform.machine()
+			arch = 'aarch64' if 'aarch64' in machine or 'arm64' in machine else 'x86_64'
 		else: arch = 'x86'
 
-		return '%s-%s' % (osname, arch)
+		host = '%s-%s' % (osname, arch)
+		
+		# Fallback/Adjustment for Termux
+		if not os.path.exists(os.path.join(self.ndk_home, 'toolchains/llvm/prebuilt', host)):
+			if os.path.exists(os.path.join(self.ndk_home, 'toolchains/llvm/prebuilt', 'android-aarch64')):
+				return 'android-aarch64'
+			elif os.path.exists(os.path.join(self.ndk_home, 'toolchains/llvm/prebuilt', 'linux-aarch64')):
+				return 'linux-aarch64'
+		
+		return host
 
 	def gen_gcc_toolchain_path(self):
 		path = 'toolchains'
@@ -224,8 +243,12 @@ class Android:
 			arch = 'arm'
 		elif self.is_arm64():
 			arch = 'arm64'
+		
+		# Modern NDK (r19+) doesn't have platforms directory
+		if self.ndk_rev >= 19:
+			return os.path.abspath(os.path.join(self.ndk_home, 'toolchains/llvm/prebuilt', self.gen_host_toolchain(), 'sysroot'))
+			
 		path = 'platforms/android-%s/arch-%s' % (self.api, arch)
-
 		return os.path.abspath(os.path.join(self.ndk_home, path))
 
 	def sysroot(self):
@@ -275,7 +298,7 @@ class Android:
 					cflags += ['-mfloat-abi=softfp']
 			else:
 				# ARMv5 support
-				cflags += ['-march=armv5te', '-mtune=xscale', '-msoft-float']
+				cflags += ['march=armv5te', '-mtune=xscale', '-msoft-float']
 		elif self.is_x86():
 			cflags += ['-mtune=atom', '-march=atom', '-mssse3', '-mfpmath=sse', '-DVECTORIZE_SINCOS', '-DHAVE_EFFICIENT_UNALIGNED_ACCESS']
 		return cflags
@@ -293,6 +316,7 @@ class Android:
 
 		if self.is_clang() or self.is_host():
 			linkflags += ['-fuse-ld=lld']
+			linkflags += ['-stdlib=libc++']
 
 		linkflags += ['-Wl,--hash-style=both','-Wl,--no-undefined']
 		return linkflags
@@ -303,7 +327,10 @@ class Android:
 			ldflags += ['-lgcc']
 
 		if self.is_clang() or self.is_host():
-			ldflags += ['-stdlib=libstdc++']
+			ldflags += ['-stdlib=libc++']
+		
+	
+			
 		if self.is_arm():
 			if self.arch == 'armeabi-v7a':
 				ldflags += ['-march=armv7-a']
@@ -345,12 +372,17 @@ def configure(conf):
 		conf.env.CXXFLAGS += android.cflags(True)
 		conf.env.LINKFLAGS += android.linkflags()
 		conf.env.LDFLAGS += android.ldflags()
-		conf.env.INCLUDES += [
-			os.path.abspath(os.path.join(android.ndk_home, 'sources', 'cxx-stl', 'gnu-libstdc++', '4.9', 'include')),
-			os.path.abspath(os.path.join(android.ndk_home, 'sources', 'cxx-stl', 'gnu-libstdc++', '4.9', 'libs', stlarch, 'include'))
-		]
-		conf.env.STLIBPATH += [os.path.abspath(os.path.join(android.ndk_home, 'sources','cxx-stl','gnu-libstdc++','4.9','libs',stlarch))]
-		conf.env.LDFLAGS += ['-lgnustl_static']
+
+		if android.ndk_rev < 18:
+			conf.env.INCLUDES += [
+				os.path.abspath(os.path.join(android.ndk_home, 'sources', 'cxx-stl', 'gnu-libstdc++', '4.9', 'include')),
+				os.path.abspath(os.path.join(android.ndk_home, 'sources', 'cxx-stl', 'gnu-libstdc++', '4.9', 'libs', stlarch, 'include'))
+			]
+			conf.env.STLIBPATH += [os.path.abspath(os.path.join(android.ndk_home, 'sources','cxx-stl','gnu-libstdc++','4.9','libs',stlarch))]
+			conf.env.LDFLAGS += ['-lgnustl_static']
+		else:
+			# Modern NDK uses libc++ which is handled by clang itself or via -static-libstdc++ / -lc++_static
+			pass
 
 		conf.env.HAVE_M = True
 		if android.is_hardfp():
