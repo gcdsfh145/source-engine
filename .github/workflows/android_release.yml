@@ -65,23 +65,23 @@ jobs:
           # Configuration
           # Added --no-pkg-config to avoid host system freetype leakage if NDK/thirdparty is intended
           python3 ./waf configure -T release \
-            --prefix=../android_build \
+            --prefix=android_build \
             --android=aarch64,host,34 \
-            --target=../android_build/aarch64 \
+            --target=android_build/aarch64 \
             --disable-warns \
             --togles \
             --build-games=$SELECTED_GAME \
             --enable-opus
             
           # Build
-          python3 ./waf 
+          python3 ./waf build
           python3 ./waf install
 
       - name: Package artifacts
         run: |
           SELECTED_GAME="${{ github.event.inputs.game }}"
           if [ -z "$SELECTED_GAME" ]; then SELECTED_GAME="hl2"; fi
-          cd ..
+          # Zip the directory within the current workspace
           zip -r source-engine-android-$SELECTED_GAME-aarch64.zip android_build/
 
       - name: Create Release
