@@ -196,7 +196,9 @@ bool VGui_Startup( CreateInterfaceFn appSystemFactory )
 //-----------------------------------------------------------------------------
 // Purpose: 
 //-----------------------------------------------------------------------------
-void VGui_CreateGlobalPanels( void )
+extern void VGUI_CreateSpawnMenu( vgui::VPANEL parent );
+
+void VGui_Start()
 {
 	VPANEL gameToolParent = enginevgui->GetPanel( PANEL_CLIENTDLL_TOOLS );
 	VPANEL toolParent = enginevgui->GetPanel( PANEL_TOOLS );
@@ -208,7 +210,11 @@ void VGui_CreateGlobalPanels( void )
 	loadingdisc->Create( gameToolParent );
 	messagechars->Create( gameToolParent );
 
+	// Spawn Menu
+	VGUI_CreateSpawnMenu( gameToolParent );
+
 	// Debugging or related tool
+
 	fps->Create( toolParent );
 	touch_panel->Create( toolParent );
 

@@ -7,13 +7,13 @@ on:
   workflow_dispatch:
     inputs:
       game:
-        description: 'Select the game to build (e.g., hl2, cstrike, entropyzero2)'
+        description: 'Game to build (e.g., hl2, cstrike)'
         required: true
         default: 'hl2'
       tag_name:
-        description: 'Tag name for the release'
+        description: 'Custom tag for release (e.g., v1.0.0)'
         required: false
-        default: 'latest-android'
+        default: ''
 
 jobs:
   build-android-aarch64:
@@ -48,6 +48,11 @@ jobs:
           export NDK=$ANDROID_NDK_HOME
           export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin
           export PATH=$TOOLCHAIN:$PATH
+          
+          GAME_NAME="${{ github.event.inputs.game }}"
+          if [ -z "$GAME_NAME" ]; then GAME_NAME="hl2"; fi
+          echo "SELECTED_GAME=$GAME_NAME" >> $GITHUB_ENV
+          
           export CC=$TOOLCHAIN/aarch64-linux-android34-clang
           export CXX=$TOOLCHAIN/aarch64-linux-android34-clang++
           export STRIP=$TOOLCHAIN/llvm-strip
@@ -55,39 +60,34 @@ jobs:
           export CXXFLAGS="-DNO_STD_REGEX=1 -Wno-error -O2 -g0 -fno-lto -fomit-frame-pointer"
           export LDFLAGS="-lunwind -static-libstdc++"
           
-          # Use input game name
-          SELECTED_GAME="${{ github.event.inputs.game }}"
-          if [ -z "$SELECTED_GAME" ]; then
-            SELECTED_GAME="hl2"
-          fi
-          echo "Building game: $SELECTED_GAME"
-
-          # Configuration
-          # Added --no-pkg-config to avoid host system freetype leakage if NDK/thirdparty is intended
           python3 ./waf configure -T release \
-            --prefix=android_build \
+            --prefix=../android_build \
             --android=aarch64,host,34 \
-            --target=android_build/aarch64 \
+            --target=../android_build/aarch64 \
             --disable-warns \
             --togles \
-            --build-games=$SELECTED_GAME \
+            --build-games=$GAME_NAME \
             --enable-opus
             
-          # Build
           python3 ./waf build
           python3 ./waf install
 
-      - name: Package artifacts
+      - name: Generate Tag and Package
+        id: release_info
         run: |
-          SELECTED_GAME="${{ github.event.inputs.game }}"
-          if [ -z "$SELECTED_GAME" ]; then SELECTED_GAME="hl2"; fi
-          # Zip the directory within the current workspace
-          zip -r source-engine-android-$SELECTED_GAME-aarch64.zip android_build/
+          TAG="${{ github.event.inputs.tag_name }}"
+          if [ -z "$TAG" ]; then TAG="b$(date +'%Y%m%d-%H%M%S')"; fi
+          TAG=$(echo $TAG | sed 's/[^a-zA-Z0-9._-]/-/g')
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          
+          cd ..
+          zip -r source-engine-android-hl2-aarch64.zip android_build/
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.event.inputs.tag_name || github.ref_name || 'manual-build' }}
-          files: source-engine-android-*-aarch64.zip
+          tag_name: ${{ steps.release_info.outputs.tag }}
+          name: "Build ${{ steps.release_info.outputs.tag }}"
+          files: ../source-engine-android-hl2-aarch64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
