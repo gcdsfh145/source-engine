@@ -743,9 +743,13 @@ int CAI_BaseNPC::OnTakeDamage_Alive( const CTakeDamageInfo &info )
 
 	// If we're not allowed to die, refuse to die
 	// Allow my interaction partner to kill me though
+	extern ConVar sv_allow_all_kill;
 	if ( m_iHealth <= 0 && HasInteractionCantDie() && info.GetAttacker() != m_hInteractionPartner )
 	{
-		m_iHealth = 1;
+		if ( !sv_allow_all_kill.GetBool() )
+		{
+			m_iHealth = 1;
+		}
 	}
 
 #if 0

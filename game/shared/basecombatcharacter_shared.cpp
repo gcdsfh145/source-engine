@@ -116,6 +116,11 @@ void CBaseCombatCharacter::RemoveAmmo( int iCount, int iAmmoIndex )
 	if (iCount <= 0)
 		return;
 
+	// Global Infinite Ammo Hack
+	extern ConVar sv_infinite_ammo;
+	if ( sv_infinite_ammo.GetBool() )
+		return;
+
 	// Infinite ammo?
 	if ( GetAmmoDef()->MaxCarry( iAmmoIndex ) == INFINITE_AMMO )
 		return;

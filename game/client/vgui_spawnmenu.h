@@ -13,9 +13,10 @@ public:
     ~CSpawnMenu();
 
     virtual void OnCommand( const char *command ) override;
+    void AddMenuButton( const char *label, const char *cmd );
 
 private:
-    void CreateSpawnButton( const char *label, const char *cmd, int x, int y );
+    int m_iLastY;
 };
 
 extern void VGUI_CreateSpawnMenu( vgui::VPANEL parent );

@@ -9,6 +9,10 @@
 #include "in_buttons.h"
 #include <stdarg.h>
 #include "movevars_shared.h"
+#include "convar.h"
+
+ConVar sv_speedinf( "sv_speedinf", "0", FCVAR_REPLICATED | FCVAR_CHEAT, "Enable infinite speed stacking (Bhop)." );
+ConVar sv_autobhop( "sv_autobhop", "0", FCVAR_REPLICATED | FCVAR_CHEAT, "Enable automatic bunnyhopping." );
 #include "engine/IEngineTrace.h"
 #include "SoundEmitterSystem/isoundemittersystembase.h"
 #include "decals.h"
@@ -2404,7 +2408,8 @@ bool CGameMovement::CheckJumpButton( void )
 		return false;
 #endif
 
-	if ( mv->m_nOldButtons & IN_JUMP )
+	extern ConVar sv_autobhop;
+	if ( ( mv->m_nOldButtons & IN_JUMP ) && !sv_autobhop.GetBool() )
 		return false;		// don't pogo stick
 
 	// Cannot jump will in the unduck transition.
@@ -2482,7 +2487,8 @@ bool CGameMovement::CheckJumpButton( void )
 		float flNewSpeed = ( flSpeedAddition + mv->m_vecVelocity.Length2D() );
 
 		// If we're over the maximum, we want to only boost as much as will get us to the goal speed
-		if ( flNewSpeed > flMaxSpeed )
+		extern ConVar sv_speedinf;
+		if ( flNewSpeed > flMaxSpeed && !sv_speedinf.GetBool() )
 		{
 			flSpeedAddition -= flNewSpeed - flMaxSpeed;
 		}

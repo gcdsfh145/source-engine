@@ -96,6 +96,7 @@ bool CBaseEntity::s_bAbsQueriesValid = true;
 
 
 ConVar sv_netvisdist( "sv_netvisdist", "10000", FCVAR_CHEAT | FCVAR_DEVELOPMENTONLY, "Test networking visibility distance" );
+ConVar sv_allow_all_kill( "sv_allow_all_kill", "0", FCVAR_REPLICATED | FCVAR_CHEAT, "Allow damage to any entity, even allies." );
 
 // This table encodes edict data.
 void SendProxy_AnimTime( const SendProp *pProp, const void *pStruct, const void *pVarData, DVariant *pOut, int iElement, int objectID )
@@ -1442,6 +1443,13 @@ void CBaseEntity::TakeDamage( const CTakeDamageInfo &inputInfo )
 {
 	if ( !g_pGameRules )
 		return;
+
+	// New logic: Force take damage if allow_all_kill is on
+	extern ConVar sv_allow_all_kill;
+	if ( sv_allow_all_kill.GetBool() )
+	{
+		m_takedamage = DAMAGE_YES;
+	}
 
 	bool bHasPhysicsForceDamage = !g_pGameRules->Damage_NoPhysicsForce( inputInfo.GetDamageType() );
 	if ( bHasPhysicsForceDamage && inputInfo.GetDamageType() != DMG_GENERIC )

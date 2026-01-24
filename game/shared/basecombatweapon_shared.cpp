@@ -5,6 +5,7 @@
 // $NoKeywords: $
 //=============================================================================//
 #include "cbase.h"
+#include "convar.h"
 #include "in_buttons.h"
 #include "engine/IEngineSound.h"
 #include "ammodef.h"
@@ -48,6 +49,8 @@
 #define MIN_HUDHINT_DISPLAY_TIME 7.0f
 
 #define HIDEWEAPON_THINK_CONTEXT			"BaseCombatWeapon_HideThink"
+
+ConVar sv_infinite_ammo( "sv_infinite_ammo", "0", FCVAR_REPLICATED | FCVAR_CHEAT, "Enable infinite ammo for players." );
 
 extern bool UTIL_ItemCanBeTouchedByPlayer( CBaseEntity *pItem, CBasePlayer *pPlayer );
 
@@ -2286,7 +2289,11 @@ void CBaseCombatWeapon::PrimaryAttack( void )
 	if ( UsesClipsForAmmo1() )
 	{
 		info.m_iShots = MIN( info.m_iShots, m_iClip1 );
-		m_iClip1 -= info.m_iShots;
+		extern ConVar sv_infinite_ammo;
+		if ( !sv_infinite_ammo.GetBool() )
+		{
+			m_iClip1 -= info.m_iShots;
+		}
 	}
 	else
 	{

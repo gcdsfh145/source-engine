@@ -193,45 +193,87 @@ bool VGui_Startup( CreateInterfaceFn appSystemFactory )
 	return true;
 }
 
-//-----------------------------------------------------------------------------
-// Purpose: 
-//-----------------------------------------------------------------------------
 extern void VGUI_CreateSpawnMenu( vgui::VPANEL parent );
 
 void VGui_Start()
+
 {
+
 	VPANEL gameToolParent = enginevgui->GetPanel( PANEL_CLIENTDLL_TOOLS );
+
 	VPANEL toolParent = enginevgui->GetPanel( PANEL_TOOLS );
+
 #if defined( TRACK_BLOCKING_IO )
+
 	VPANEL gameDLLPanel = enginevgui->GetPanel( PANEL_GAMEDLL );
+
 #endif
+
 	// Part of game
+
 	internalCenterPrint->Create( gameToolParent );
+
 	loadingdisc->Create( gameToolParent );
+
 	messagechars->Create( gameToolParent );
 
+
+
 	// Spawn Menu
+
 	VGUI_CreateSpawnMenu( gameToolParent );
+
+
 
 	// Debugging or related tool
 
 	fps->Create( toolParent );
+
 	touch_panel->Create( toolParent );
 
+
+
 #if defined( TRACK_BLOCKING_IO )
+
 	iopanel->Create( gameDLLPanel );
+
 #endif
+
 	netgraphpanel->Create( toolParent );
+
 	debugoverlaypanel->Create( gameToolParent );
 
+
+
 #ifndef _X360
+
 	// Create mp3 player off of tool parent panel
+
 	MP3Player_Create( toolParent );
+
 #endif
+
 #ifdef SIXENSE
+
 	g_pSixenseInput->CreateGUI( gameToolParent );
+
 #endif
+
 }
+
+
+
+// Alias for linker compatibility
+
+void VGui_CreateGlobalPanels()
+
+{
+
+	VGui_Start();
+
+}
+
+
 
 void VGui_Shutdown()
 {
