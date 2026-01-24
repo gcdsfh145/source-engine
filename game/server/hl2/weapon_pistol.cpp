@@ -28,6 +28,7 @@
 #define	PISTOL_ACCURACY_MAXIMUM_PENALTY_TIME	1.5f	// Maximum penalty to deal out
 
 ConVar	pistol_use_new_accuracy( "pistol_use_new_accuracy", "1" );
+ConVar  pistol_rpg_mode( "pistol_rpg_mode", "0", FCVAR_CHEAT );
 
 //-----------------------------------------------------------------------------
 // CWeaponPistol
@@ -234,7 +235,12 @@ void CWeaponPistol::PrimaryAttack( void )
 	}
 
 	m_flLastAttackTime = gpGlobals->curtime;
-	m_flSoonestPrimaryAttack = gpGlobals->curtime + PISTOL_FASTEST_REFIRE_TIME;
+	
+	if ( pistol_rpg_mode.GetBool() )
+		m_flSoonestPrimaryAttack = gpGlobals->curtime + 0.05f; // Super fast fire
+	else
+		m_flSoonestPrimaryAttack = gpGlobals->curtime + PISTOL_FASTEST_REFIRE_TIME;
+
 	CSoundEnt::InsertSound( SOUND_COMBAT, GetAbsOrigin(), SOUNDENT_VOLUME_PISTOL, 0.2, GetOwner() );
 
 	CBasePlayer *pOwner = ToBasePlayer( GetOwner() );
@@ -246,6 +252,33 @@ void CWeaponPistol::PrimaryAttack( void )
 		// not be the ideal way to achieve this, but it's cheap and it works, which is
 		// great for a feature we're evaluating. (sjb)
 		pOwner->ViewPunchReset();
+
+		if ( pistol_rpg_mode.GetBool() )
+		{
+			// RPG MODE LOGIC
+			Vector vecOrigin;
+			Vector vecForward;
+			pOwner->EyeVectors( &vecForward );
+			vecOrigin = pOwner->Weapon_ShootPosition();
+
+			CBaseEntity *pRocket = CreateEntityByName( "rpg_missile" );
+			if ( pRocket )
+			{
+				pRocket->SetAbsOrigin( vecOrigin + vecForward * 32 );
+				pRocket->SetAbsAngles( pOwner->EyeAngles() );
+				pRocket->Spawn();
+				pRocket->SetOwnerEntity( pOwner );
+				pRocket->SetAbsVelocity( vecForward * 1500 );
+			}
+			
+			WeaponSound( SINGLE );
+			pOwner->DoMuzzleFlash();
+			SendWeaponAnim( GetPrimaryAttackActivity() );
+			pOwner->SetAnimation( PLAYER_ATTACK1 );
+			
+			m_flNextPrimaryAttack = gpGlobals->curtime + 0.05f;
+			return; // Skip normal bullet logic
+		}
 	}
 
 	BaseClass::PrimaryAttack();

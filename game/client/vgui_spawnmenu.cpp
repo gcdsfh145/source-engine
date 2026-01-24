@@ -49,6 +49,14 @@ CSpawnMenu::CSpawnMenu( vgui::VPANEL parent ) : BaseClass( NULL, "SpawnMenu" )
     AddMenuButton( "生成：医疗包 + 电池", "give item_healthkit; give item_battery" );
     AddMenuButton( "删除全部 NPC", "npc_destroy_unselected" );
 
+    AddMenuButton( "--- 额外功能 ---", "echo ---" );
+    AddMenuButton( "开启：二段跳", "sv_jumpset 2" );
+    AddMenuButton( "开启：五段跳", "sv_jumpset 5" );
+    AddMenuButton( "关闭：多段跳", "sv_jumpset 1" );
+    
+    AddMenuButton( "开启：RPG 手枪模式", "pistol_rpg_mode 1" );
+    AddMenuButton( "关闭：RPG 手枪模式", "pistol_rpg_mode 0" );
+
     SetVisible( false );
 }
 
