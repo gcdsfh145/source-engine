@@ -987,108 +987,18 @@ float CGameMovement::ComputeConstraintSpeedFactor( void )
 //-----------------------------------------------------------------------------
 void CGameMovement::CheckParameters( void )
 {
-	QAngle	v_angle;
+	float spd = mv->m_flMaxSpeed;
+	float flCurrentSpeed = mv->m_vecVelocity.Length();
 
-	if ( player->GetMoveType() != MOVETYPE_ISOMETRIC &&
-		 player->GetMoveType() != MOVETYPE_NOCLIP &&
-		 player->GetMoveType() != MOVETYPE_OBSERVER )
+	// sv_speedinf: bypass all speed limits
+	extern ConVar sv_speedinf;
+	if ( sv_speedinf.GetBool() )
+		return;
+
+	if ( flCurrentSpeed > spd )
 	{
-		float spd;
-		float maxspeed;
-
-		spd = ( mv->m_flForwardMove * mv->m_flForwardMove ) +
-			  ( mv->m_flSideMove * mv->m_flSideMove ) +
-			  ( mv->m_flUpMove * mv->m_flUpMove );
-
-		maxspeed = mv->m_flClientMaxSpeed;
-		if ( maxspeed != 0.0 )
-		{
-			mv->m_flMaxSpeed = MIN( maxspeed, mv->m_flMaxSpeed );
-		}
-
-		// Slow down by the speed factor
-		float flSpeedFactor = 1.0f;
-		if (player->m_pSurfaceData)
-		{
-			flSpeedFactor = player->m_pSurfaceData->game.maxSpeedFactor;
-		}
-
-		// If we have a constraint, slow down because of that too.
-		float flConstraintSpeedFactor = ComputeConstraintSpeedFactor();
-		if (flConstraintSpeedFactor < flSpeedFactor)
-			flSpeedFactor = flConstraintSpeedFactor;
-
-		mv->m_flMaxSpeed *= flSpeedFactor;
-
-		if ( g_bMovementOptimizations )
-		{
-			// Same thing but only do the sqrt if we have to.
-			if ( ( spd != 0.0 ) && ( spd > mv->m_flMaxSpeed*mv->m_flMaxSpeed ) )
-			{
-				float fRatio = mv->m_flMaxSpeed / sqrt( spd );
-				mv->m_flForwardMove *= fRatio;
-				mv->m_flSideMove    *= fRatio;
-				mv->m_flUpMove      *= fRatio;
-			}
-		}
-		else
-		{
-			spd = sqrt( spd );
-			if ( ( spd != 0.0 ) && ( spd > mv->m_flMaxSpeed ) )
-			{
-				float fRatio = mv->m_flMaxSpeed / spd;
-				mv->m_flForwardMove *= fRatio;
-				mv->m_flSideMove    *= fRatio;
-				mv->m_flUpMove      *= fRatio;
-			}
-		}
-	}
-
-	if ( player->GetFlags() & FL_FROZEN ||
-		 player->GetFlags() & FL_ONTRAIN || 
-		 IsDead() )
-	{
-		mv->m_flForwardMove = 0;
-		mv->m_flSideMove    = 0;
-		mv->m_flUpMove      = 0;
-	}
-
-	DecayPunchAngle();
-
-	// Take angles from command.
-	if ( !IsDead() )
-	{
-		v_angle = mv->m_vecAngles;
-		v_angle = v_angle + player->m_Local.m_vecPunchAngle;
-
-		// Now adjust roll angle
-		if ( player->GetMoveType() != MOVETYPE_ISOMETRIC  &&
-			 player->GetMoveType() != MOVETYPE_NOCLIP )
-		{
-			mv->m_vecAngles[ROLL]  = CalcRoll( v_angle, mv->m_vecVelocity, sv_rollangle.GetFloat(), sv_rollspeed.GetFloat() );
-		}
-		else
-		{
-			mv->m_vecAngles[ROLL] = 0.0; // v_angle[ ROLL ];
-		}
-		mv->m_vecAngles[PITCH] = v_angle[PITCH];
-		mv->m_vecAngles[YAW]   = v_angle[YAW];
-	}
-	else
-	{
-		mv->m_vecAngles = mv->m_vecOldAngles;
-	}
-
-	// Set dead player view_offset
-	if ( IsDead() )
-	{
-		player->SetViewOffset( VEC_DEAD_VIEWHEIGHT_SCALED( player ) );
-	}
-
-	// Adjust client view angles to match values used on server.
-	if ( mv->m_vecAngles[YAW] > 180.0f )
-	{
-		mv->m_vecAngles[YAW] -= 360.0f;
+		float flScale = spd / flCurrentSpeed;
+		mv->m_vecVelocity *= flScale;
 	}
 }
 

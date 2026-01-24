@@ -14,6 +14,7 @@ public:
 
     virtual void OnCommand( const char *command ) override;
     void AddMenuButton( const char *label, const char *cmd );
+    void UpdateMenu();
 
 private:
     int m_iLastY;
