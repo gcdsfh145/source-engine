@@ -117,9 +117,9 @@ CWeaponPistol::CWeaponPistol( void )
 {
 	m_flSoonestPrimaryAttack = gpGlobals->curtime;
 	m_flAccuracyPenalty = 0.0f;
-	m_fMinRange1		= 24;
-	m_fMaxRange1		= 1500;
-	m_bFiresUnderwater	= true;
+	m_fMinRange1 = 24; m_fMaxRange1 = 1500;
+	m_fMinRange2 = 24; m_fMaxRange2 = 200;
+	m_bFiresUnderwater = true;
 }
 
 void CWeaponPistol::Precache( void ) { BaseClass::Precache(); }
@@ -151,8 +151,8 @@ void CWeaponPistol::DryFire( void )
 {
 	WeaponSound( EMPTY );
 	SendWeaponAnim( ACT_VM_DRYFIRE );
-	m_flSoonestPrimaryAttack	= gpGlobals->curtime + PISTOL_FASTEST_DRY_REFIRE_TIME;
-	m_flNextPrimaryAttack		= gpGlobals->curtime + SequenceDuration();
+	m_flSoonestPrimaryAttack = gpGlobals->curtime + PISTOL_FASTEST_DRY_REFIRE_TIME;
+	m_flNextPrimaryAttack = gpGlobals->curtime + SequenceDuration();
 }
 
 void CWeaponPistol::PrimaryAttack( void )
@@ -162,11 +162,11 @@ void CWeaponPistol::PrimaryAttack( void )
 
 	m_flLastAttackTime = gpGlobals->curtime;
 	m_flSoonestPrimaryAttack = gpGlobals->curtime + PISTOL_FASTEST_REFIRE_TIME;
+	CSoundEnt::InsertSound( SOUND_COMBAT, GetAbsOrigin(), SOUNDENT_VOLUME_PISTOL, 0.2, GetOwner() );
 	CBasePlayer *pOwner = ToBasePlayer( GetOwner() );
 	if( pOwner ) pOwner->ViewPunchReset();
 
 	BaseClass::PrimaryAttack();
-	m_flAccuracyPenalty += PISTOL_ACCURACY_SHOT_PENALTY_TIME;
 }
 
 void CWeaponPistol::UpdatePenaltyTime( void )
@@ -222,7 +222,7 @@ void CWeaponPistol::AddViewKick( void )
 }
 
 //-----------------------------------------------------------------------------
-// CWeaponRPGPistol - Corrected Network Tables for RPG PISTOL
+// CWeaponRPGPistol - Independent RPG Weapon
 //-----------------------------------------------------------------------------
 
 class CWeaponRPGPistol : public CWeaponPistol
@@ -270,7 +270,6 @@ public:
 	}
 };
 
-// 表名改为 DT_WeaponRPGPistol，对应客户端的 WeaponRPGPistol
 IMPLEMENT_SERVERCLASS_ST(CWeaponRPGPistol, DT_WeaponRPGPistol)
 END_SEND_TABLE()
 

@@ -510,3 +510,64 @@ const WeaponProficiencyInfo_t *CWeaponAR2::GetProficiencyValues()
 
 	return proficiencyTable;
 }
+
+#include "hl2/prop_combine_ball.h"
+
+//-----------------------------------------------------------------------------
+// CWeaponAR3Fire - THE STANDALONE AR3 RAPID FIRE COMBINE BALLS
+//-----------------------------------------------------------------------------
+class CWeaponAR3Fire : public CBaseHLCombatWeapon
+{
+	DECLARE_DATADESC();
+public:
+	DECLARE_CLASS( CWeaponAR3Fire, CBaseHLCombatWeapon );
+	CWeaponAR3Fire() {}
+	DECLARE_SERVERCLASS();
+
+	void Precache( void )
+	{
+		BaseClass::Precache();
+		UTIL_PrecacheOther( "prop_combine_ball" );
+	}
+
+	void PrimaryAttack( void )
+	{
+		CBasePlayer *pOwner = ToBasePlayer( GetOwner() );
+		if( pOwner )
+		{
+			Vector vecOrigin, vecForward;
+			pOwner->EyeVectors( &vecForward );
+			vecOrigin = pOwner->Weapon_ShootPosition();
+
+			// 真正的 AR2 大球发射逻辑
+			Vector vecVelocity = vecForward * 1500.0f;
+			
+			// 调用引擎原生函数创建并返回大球实体
+			CreateCombineBall( vecOrigin + vecForward * 32, 
+							   vecVelocity, 
+							   12.0f, // 半径
+							   150.0f, // 质量
+							   4.0f,  // 持续时间
+							   pOwner );
+
+			WeaponSound( SINGLE );
+			pOwner->DoMuzzleFlash();
+			SendWeaponAnim( ACT_VM_PRIMARYATTACK );
+			pOwner->SetAnimation( PLAYER_ATTACK1 );
+			
+			// 确保不消耗弹药，让极速发射可持续
+			m_iClip1 = 30; 
+			
+			m_flNextPrimaryAttack = gpGlobals->curtime + 0.05f; // 极速发射
+		}
+	}
+};
+IMPLEMENT_SERVERCLASS_ST(CWeaponAR3Fire, DT_WeaponAR3Fire)
+END_SEND_TABLE()
+
+LINK_ENTITY_TO_CLASS( weapon_ar3fire, CWeaponAR3Fire );
+PRECACHE_WEAPON_REGISTER( weapon_ar3fire );
+
+BEGIN_DATADESC( CWeaponAR3Fire )
+END_DATADESC()
+

@@ -1046,6 +1046,12 @@ void CGameMovement::ReduceTimers( void )
 //-----------------------------------------------------------------------------
 void CGameMovement::ProcessMovement( CBasePlayer *pPlayer, CMoveData *pMove )
 {
+#ifdef ANDROID
+	// 强制锁定视角：绝对不允许产生 ROLL 偏转
+	pPlayer->pl.v_angle[ROLL] = 0;
+	pPlayer->m_Local.m_vecPunchAngle.Set( ROLL, 0 );
+	pPlayer->m_Local.m_vecPunchAngleVel.Set( ROLL, 0 );
+#endif
 	Assert( pMove && pPlayer );
 
 	float flStoreFrametime = gpGlobals->frametime;
@@ -1126,6 +1132,12 @@ void CGameMovement::FinishMove( void )
 //-----------------------------------------------------------------------------
 void CGameMovement::DecayPunchAngle( void )
 {
+	// Force zero roll on Android to keep the horizon perfectly level
+#ifdef ANDROID
+	player->m_Local.m_vecPunchAngle.Set( ROLL, 0 );
+	player->m_Local.m_vecPunchAngleVel.Set( ROLL, 0 );
+#endif
+
 	if ( player->m_Local.m_vecPunchAngle->LengthSqr() > 0.001 || player->m_Local.m_vecPunchAngleVel->LengthSqr() > 0.001 )
 	{
 		player->m_Local.m_vecPunchAngle += player->m_Local.m_vecPunchAngleVel * gpGlobals->frametime;
@@ -3910,9 +3922,8 @@ void CGameMovement::PlayerRoughLandingEffects( float fvol )
 		player->PlayStepSound( (Vector &)mv->GetAbsOrigin(), player->m_pSurfaceData, fvol, true );
 
 		//
-		// Knock the screen around a little bit, temporary effect.
-		//
-		player->m_Local.m_vecPunchAngle.Set( ROLL, player->m_Local.m_flFallVelocity * 0.013 );
+		// Completely disable landing roll tilt to prevent crooked view on Android
+		player->m_Local.m_vecPunchAngle.Set( ROLL, 0 );
 
 		if ( player->m_Local.m_vecPunchAngle[PITCH] > 8 )
 		{
