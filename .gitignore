@@ -39,5 +39,8 @@ waf3*/
 source-engine.sln
 .lua-download
 .waf3-2.0.26-84a26fddc7f40e4e4f00569f36be455a/
-.android_build/
+android_build/
 *.bak
+.lock-waf_android_build
+build_android.sh
+cou.sh
