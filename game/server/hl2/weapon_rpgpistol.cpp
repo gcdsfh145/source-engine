@@ -8,6 +8,7 @@
 #include "npcevent.h"
 #include "basehlcombatweapon.h"
 #include "basecombatcharacter.h"
+#include "weapon_rpg.h"
 #include "ai_basenpc.h"
 #include "player.h"
 #include "gamerules.h"
@@ -103,14 +104,13 @@ void CWeaponRPGPistol::PrimaryAttack( void )
 	pOwner->EyeVectors( &vecForward );
 	vecOrigin = pOwner->Weapon_ShootPosition();
 
-	CBaseEntity *pRocket = CreateEntityByName( "rpg_missile" );
-	if ( pRocket )
+	CMissile *pMissile = CMissile::Create(
+		vecOrigin + vecForward * 32.0f,
+		pOwner->EyeAngles(),
+		pOwner->edict() );
+	if ( pMissile )
 	{
-		pRocket->SetAbsOrigin( vecOrigin + vecForward * 32 );
-		pRocket->SetAbsAngles( pOwner->EyeAngles() );
-		pRocket->Spawn();
-		pRocket->SetOwnerEntity( pOwner );
-		pRocket->SetAbsVelocity( vecForward * 1500 );
+		pMissile->SetAbsVelocity( vecForward * 1500.0f );
 	}
 	
 	WeaponSound( SINGLE );

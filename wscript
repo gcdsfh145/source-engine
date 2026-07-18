@@ -46,6 +46,7 @@ Context.Context.line_just = 55 # should fit for everything on 80x26
 projects={
 	'game': [
 		'appframework',
+		'scripting/lua',
 		'bitmap',
 		'choreoobjects',
 		'datacache',
@@ -333,7 +334,8 @@ def check_deps(conf):
 	if conf.env.DEST_OS != 'win32':
 		conf.check_cc(lib='dl', mandatory=False)
 		conf.check_cc(lib='bz2', mandatory=True)
-		conf.check_cc(lib='rt', mandatory=False)
+		if conf.env.DEST_OS != 'android':
+			conf.check_cc(lib='rt', mandatory=False)
 
 		if not conf.env.LIB_M: # HACK: already added in xcompile!
 			conf.check_cc(lib='m')
@@ -489,7 +491,7 @@ def configure(conf):
 			'-faligned-new',
 		]
 
-	c_compiler_optional_flags = [
+	c_compiler_optional_flags = [] if conf.env.DEST_OS == 'android' else [
 		'-fnonconst-initializers' # owcc
 	]
 
@@ -513,8 +515,6 @@ def configure(conf):
 			'-I'+os.path.abspath('.')+'/thirdparty/openal-soft/include/',
 			'-I'+os.path.abspath('.')+'/thirdparty/fontconfig',
 			'-I'+os.path.abspath('.')+'/thirdparty/freetype/include',
-			'-llog',
-			'-lz'
 		]
 
 		flags += ['-funwind-tables', '-g']

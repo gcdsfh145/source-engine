@@ -79,6 +79,8 @@ $Project
 	$Folder	"Source Files"
 	{
 		$File	"$SRCDIR\game\shared\achievement_saverestore.cpp"
+		$File	"$SRCDIR\game\shared\lua_plugin_system.cpp"
+		$File	"$SRCDIR\scripting\lua\lua_plugin_manager.cpp"
 		$File	"$SRCDIR\game\shared\achievement_saverestore.h"
 		$File	"$SRCDIR\game\shared\achievementmgr.cpp"
 		$File	"$SRCDIR\game\shared\achievementmgr.h"

@@ -43,7 +43,9 @@ def build(bld):
 		'../../public/tier1',
 		'../../vgui2/include',
 		'../../vgui2/controls',
-		'../shared'
+		'../shared',
+		'../../scripting/lua',
+		'../../external/lua-5.1.5/src'
 	]
 
 	libs = [
@@ -62,7 +64,8 @@ def build(bld):
 		'bitmap',
 		'vtf',
 		'RT',
-		'ZLIB'
+		'ZLIB',
+		'lua_runtime'
 	]
 
 	install_path = bld.env.PREFIX
@@ -94,4 +97,3 @@ def build(bld):
 		subsystem = bld.env.MSVC_SUBSYSTEM,
 		idx      = bld.get_taskgen_count()
 	)
-

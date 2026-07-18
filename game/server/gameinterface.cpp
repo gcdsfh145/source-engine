@@ -40,6 +40,7 @@
 #include "saverestoretypes.h"
 #include "physics_saverestore.h"
 #include "achievement_saverestore.h"
+#include "lua_plugin_system.h"
 #include "tier0/vprof.h"
 #include "effect_dispatch_data.h"
 #include "engine/IStaticPropMgr.h"
@@ -2778,8 +2779,10 @@ void CServerGameClients::ClientDisconnect( edict_t *pEdict )
 					}
 				}
 			}
-		#endif
+	#endif
 	}
+
+	LuaServerPluginClientDisconnect( pEdict );
 }
 
 void CServerGameClients::ClientPutInServer( edict_t *pEntity, const char *playername )
@@ -2788,6 +2791,8 @@ void CServerGameClients::ClientPutInServer( edict_t *pEntity, const char *player
 		g_pClientPutInServerOverride( pEntity, playername );
 	else
 		::ClientPutInServer( pEntity, playername );
+
+	LuaServerPluginClientPutInServer( pEntity, playername );
 }
 
 void CServerGameClients::ClientCommand( edict_t *pEntity, const CCommand &args )

@@ -50,12 +50,14 @@ def build(bld):
 		'../../common',
 		'../../public/tier0',
 		'../../public/tier1',
-		'../../public'
+		'../../public',
+		'../../scripting/lua',
+		'../../external/lua-5.1.5/src'
 	]
 
 	defines = []
 
-	libs = ['tier0','particles','dmxloader','tier1','tier2','tier3','mathlib','vstdlib','choreoobjects','steam_api']
+	libs = ['tier0','particles','dmxloader','tier1','tier2','tier3','mathlib','vstdlib','choreoobjects','steam_api','lua_runtime']
 	if bld.env.DEST_OS == 'win32':
 		libs += ['USER32']
 
@@ -81,4 +83,3 @@ def build(bld):
 		subsystem = bld.env.MSVC_SUBSYSTEM,
 		idx      = bld.get_taskgen_count()
 	)
-

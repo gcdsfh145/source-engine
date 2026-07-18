@@ -85,7 +85,7 @@ class Android:
 			self.api = ANDROID_NDK_API_MIN[self.ndk_rev]
 			Logs.warn('API level automatically was set to %d due to NDK support' % self.api)
 
-		if self.is_arm64() or self.is_amd64() and self.api < ANDROID_64BIT_API_MIN:
+		if (self.is_arm64() or self.is_amd64()) and self.api < ANDROID_64BIT_API_MIN:
 			self.api = ANDROID_64BIT_API_MIN
 			Logs.warn('API level for 64-bit target automatically was set to %d' % self.api)
 
@@ -155,16 +155,11 @@ class Android:
 		return self.arch
 
 	def gen_host_toolchain(self):
-		# With host toolchain we don't care about OS
-		# so just download NDK for Linux x86_64
-		if self.is_host():
-			return 'linux-x86_64'
-
 		if sys.platform.startswith('win32') or sys.platform.startswith('cygwin'):
 			osname = 'windows'
 		elif sys.platform.startswith('darwin'):
 			osname = 'darwin'
-		elif sys.platform.startswith('linux'):
+		elif sys.platform.startswith('linux') or sys.platform.startswith('android'):
 			if os.path.exists('/system/bin/reboot'): # Simple check for Android
 				osname = 'linux-android' if self.ndk_rev < 23 else 'android'
 			else:
@@ -179,14 +174,19 @@ class Android:
 		else: arch = 'x86'
 
 		host = '%s-%s' % (osname, arch)
-		
-		# Fallback/Adjustment for Termux
-		if not os.path.exists(os.path.join(self.ndk_home, 'toolchains/llvm/prebuilt', host)):
-			if os.path.exists(os.path.join(self.ndk_home, 'toolchains/llvm/prebuilt', 'android-aarch64')):
-				return 'android-aarch64'
-			elif os.path.exists(os.path.join(self.ndk_home, 'toolchains/llvm/prebuilt', 'linux-aarch64')):
-				return 'linux-aarch64'
-		
+
+		# NDK packages used by Termux use linux-arm64, while desktop NDK
+		# packages normally use linux-x86_64.  Select an actually installed
+		# prebuilt directory instead of assuming the desktop host name.
+		candidates = [host]
+		if arch == 'aarch64':
+			candidates += ['linux-arm64', 'linux-aarch64', 'android-aarch64']
+		elif arch == 'x86_64':
+			candidates += ['linux-x86_64']
+		for candidate in candidates:
+			if os.path.isdir(os.path.join(self.ndk_home, 'toolchains/llvm/prebuilt', candidate)):
+				return candidate
+
 		return host
 
 	def gen_gcc_toolchain_path(self):
@@ -231,11 +231,10 @@ class Android:
 		return os.path.join(self.gen_binutils_path(), 'strip')
 
 	def system_stl(self):
-		# TODO: proper STL support
-		return [
-			#os.path.abspath(os.path.join(self.ndk_home, 'sources', 'cxx-stl', 'system', 'include')),
-			os.path.abspath(os.path.join(self.ndk_home, 'sources', 'android', 'support', 'include'))
-		]
+		# The old android_support headers only exist in legacy NDKs.
+		if self.ndk_rev >= 18:
+			return []
+		return [os.path.abspath(os.path.join(self.ndk_home, 'sources', 'android', 'support', 'include'))]
 
 	def libsysroot(self):
 		arch = self.arch
@@ -372,6 +371,10 @@ def configure(conf):
 		conf.env.CXXFLAGS += android.cflags(True)
 		conf.env.LINKFLAGS += android.linkflags()
 		conf.env.LDFLAGS += android.ldflags()
+		# Android's libc++ is supplied by the NDK toolchain.  Static libstdc++
+		# is a desktop/GCC option and can create non-PIC relocations in .so files.
+		conf.env.LDFLAGS = [flag for flag in conf.env.LDFLAGS if flag != '-static-libstdc++']
+		conf.env.LIB_LOG = ['log']
 
 		if android.ndk_rev < 18:
 			conf.env.INCLUDES += [
