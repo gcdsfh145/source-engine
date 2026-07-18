@@ -1,0 +1,93 @@
+name: Android Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      game:
+        description: 'Game to build (e.g., hl2, cstrike)'
+        required: true
+        default: 'hl2'
+      tag_name:
+        description: 'Custom tag for release (e.g., v1.0.0)'
+        required: false
+        default: ''
+
+jobs:
+  build-android-aarch64:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Set up NDK
+        uses: android-actions/setup-android@v3
+        with:
+          ndk-version: 28.0.12433510
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libfreetype6-dev libsdl2-dev libopenal-dev libcurl4-openssl-dev libpng-dev libjpeg-dev zlib1g-dev libopus-dev
+
+      - name: Build Android aarch64
+        run: |
+          export NDK=$ANDROID_NDK_HOME
+          export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin
+          export PATH=$TOOLCHAIN:$PATH
+          
+          GAME_NAME="${{ github.event.inputs.game }}"
+          if [ -z "$GAME_NAME" ]; then GAME_NAME="hl2"; fi
+          echo "SELECTED_GAME=$GAME_NAME" >> $GITHUB_ENV
+          
+          export CC=$TOOLCHAIN/aarch64-linux-android34-clang
+          export CXX=$TOOLCHAIN/aarch64-linux-android34-clang++
+          export STRIP=$TOOLCHAIN/llvm-strip
+          export CFLAGS="-O2 -g0 -fno-lto -fomit-frame-pointer"
+          export CXXFLAGS="-DNO_STD_REGEX=1 -Wno-error -O2 -g0 -fno-lto -fomit-frame-pointer"
+          export LDFLAGS="-lunwind -static-libstdc++"
+          
+          python3 ./waf configure -T release \
+            --prefix=../android_build \
+            --android=aarch64,host,34 \
+            --target=../android_build/aarch64 \
+            --disable-warns \
+            --togles \
+            --build-games=$GAME_NAME \
+            --enable-opus
+            
+          python3 ./waf build
+          python3 ./waf install
+
+      - name: Generate Tag and Package
+        id: release_info
+        run: |
+          TAG="${{ github.event.inputs.tag_name }}"
+          if [ -z "$TAG" ]; then TAG="b$(date +'%Y%m%d-%H%M%S')"; fi
+          TAG=$(echo $TAG | sed 's/[^a-zA-Z0-9._-]/-/g')
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          
+          cd ..
+          zip -r source-engine-android-hl2-aarch64.zip android_build/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.release_info.outputs.tag }}
+          name: "Build ${{ steps.release_info.outputs.tag }}"
+          files: ../source-engine-android-hl2-aarch64.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
