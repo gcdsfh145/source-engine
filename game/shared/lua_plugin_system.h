@@ -12,10 +12,13 @@
 #endif
 
 class edict_t;
+class CBaseEntity;
+class CTakeDamageInfo;
 
 #ifndef CLIENT_DLL
 void LuaServerPluginClientPutInServer( edict_t *entity, const char *playerName );
 void LuaServerPluginClientDisconnect( edict_t *entity );
+bool LuaServerPluginEntityTakeDamage( CBaseEntity *entity, const CTakeDamageInfo &info );
 #endif
 
 #endif // LUA_PLUGIN_SYSTEM_H

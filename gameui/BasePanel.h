@@ -33,6 +33,7 @@ enum
 };
 
 class CMatchmakingBasePanel;
+class CLuaPluginManagerDialog;
 class CBackgroundMenuButton;
 class CGameMenu;
 class CAsyncCtxOnDeviceAttached;
@@ -231,6 +232,7 @@ public:
 	void OnOpenLoadCommentaryDialog();
 	void OpenLoadSingleplayerCommentaryDialog();
 	void OnOpenAchievementsDialog();
+	void OnOpenLuaPluginManager();
 
     //=============================================================================
     // HPE_BEGIN:
@@ -382,6 +384,7 @@ private:
 	vgui::DHANDLE<vgui::Frame> m_hBenchmarkDialog;
 	vgui::DHANDLE<vgui::Frame> m_hLoadCommentaryDialog;
 	vgui::DHANDLE<vgui::Frame> m_hAchievementsDialog;
+	vgui::DHANDLE<CLuaPluginManagerDialog> m_hLuaPluginManagerDialog;
 
 	// Xbox 360
 	vgui::DHANDLE<vgui::Frame> m_hMatchmakingBasePanel;

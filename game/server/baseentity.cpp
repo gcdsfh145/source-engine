@@ -33,6 +33,7 @@
 #include "physics_saverestore.h"
 #include "saverestore_utlvector.h"
 #include "bone_setup.h"
+#include "lua_plugin_system.h"
 #include "vcollide_parse.h"
 #include "filters.h"
 #include "te_effect_dispatch.h"
@@ -1442,6 +1443,9 @@ int CBaseEntity::OnTakeDamage( const CTakeDamageInfo &info )
 void CBaseEntity::TakeDamage( const CTakeDamageInfo &inputInfo )
 {
 	if ( !g_pGameRules )
+		return;
+
+	if ( !LuaServerPluginEntityTakeDamage( this, inputInfo ) )
 		return;
 
 	// New logic: Force take damage if allow_all_kill is on

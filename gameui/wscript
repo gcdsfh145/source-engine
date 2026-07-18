@@ -22,6 +22,7 @@ def build(bld):
 		'BasePanel.cpp',
 		'GameConsole.cpp',
 		'GameUI_Interface.cpp',
+		'LuaPluginManagerDialog.cpp',
 		'ModInfo.cpp',
 		'MouseMessageForwardingPanel.cpp',
 		'../common/GameUI/ObjectList.cpp',
@@ -134,4 +135,3 @@ def build(bld):
 		subsystem = bld.env.MSVC_SUBSYSTEM,
 		idx      = bld.get_taskgen_count()
 	)
-

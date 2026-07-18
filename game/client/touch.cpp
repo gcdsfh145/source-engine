@@ -55,6 +55,16 @@ ConVar touch_button_info( "touch_button_info", "0", FCVAR_ARCHIVE );
 
 extern IVEngineClient *engine;
 
+static void TouchExecuteCommand( const char *command )
+{
+	if ( !engine || !command || !command[0] )
+		return;
+
+	char commandWithNewline[258];
+	Q_snprintf( commandWithNewline, sizeof( commandWithNewline ), "%s\n", command );
+	engine->ClientCmd_Unrestricted( commandWithNewline );
+}
+
 CTouchControls gTouch;
 static VTouchPanel g_TouchPanel;
 VTouchPanel *touch_panel = &g_TouchPanel;
@@ -961,7 +971,7 @@ void CTouchControls::EditEvent(touch_event_t *ev)
 				
 				if( btn->flags & TOUCH_FL_NOEDIT )
 				{
-					engine->ClientCmd_Unrestricted( btn->command );
+					TouchExecuteCommand( btn->command );
 					continue;
 				}
 
@@ -1076,7 +1086,7 @@ void CTouchControls::FingerPress(touch_event_t *ev)
 						btn->finger = look_finger;
 				}
 				else
-					engine->ClientCmd_Unrestricted( btn->command );
+					TouchExecuteCommand( btn->command );
 			}
 		}
 	}
@@ -1106,7 +1116,7 @@ void CTouchControls::FingerPress(touch_event_t *ev)
 
 					snprintf( cmd, sizeof cmd, "%s", btn->command );
 					cmd[0] = '-';
-					engine->ClientCmd_Unrestricted( cmd );
+						TouchExecuteCommand( cmd );
 				}
 			}
 		}

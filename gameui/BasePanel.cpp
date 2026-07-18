@@ -10,6 +10,7 @@
 #include "threadtools.h"
 
 #include "BasePanel.h"
+#include "LuaPluginManagerDialog.h"
 #include "EngineInterface.h"
 #include "VGuiSystemModuleLoader.h"
 
@@ -1636,6 +1637,8 @@ CGameMenu *CBasePanel::RecursiveLoadGameMenu(KeyValues *datafile)
 		menu->AddMenuItem(name, label, cmd, this, dat);
 	}
 
+	menu->AddMenuItem( "LuaPluginManager", "Lua Plugins", "OpenLuaPluginManager", this );
+
 	return menu;
 }
 
@@ -2043,6 +2046,10 @@ void CBasePanel::RunMenuCommand(const char *command)
 	else if ( !Q_stricmp( command, "OpenPlayerListDialog" ) )
 	{
 		OnOpenPlayerListDialog();
+	}
+	else if ( !Q_stricmp( command, "OpenLuaPluginManager" ) )
+	{
+		OnOpenLuaPluginManager();
 	}
 	else if ( !Q_stricmp( command, "OpenNewGameDialog" ) )
 	{
@@ -3350,6 +3357,19 @@ void CBasePanel::OnOpenPlayerListDialog()
 		PositionDialog(m_hPlayerListDialog);
 	}
 	m_hPlayerListDialog->Activate();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Open the native Lua plugin manager from the main menu.
+//-----------------------------------------------------------------------------
+void CBasePanel::OnOpenLuaPluginManager()
+{
+	if ( !m_hLuaPluginManagerDialog.Get() )
+	{
+		m_hLuaPluginManagerDialog = new CLuaPluginManagerDialog( this );
+		PositionDialog( m_hLuaPluginManagerDialog );
+	}
+	m_hLuaPluginManagerDialog->Activate();
 }
 
 //-----------------------------------------------------------------------------

@@ -42,5 +42,8 @@ source-engine.sln
 android_build/
 *.bak
 .lock-waf_android_build
-build_android.sh
+*.so
+compile_commands.json
+scripts/plugins/*/disabled.cfg
+scripts/plugins/data/
 cou.sh

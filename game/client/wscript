@@ -74,7 +74,8 @@ def build(bld):
 
 	source = [ 
 		'in_touch.cpp',
-		'vgui_spawnmenu.cpp'
+		'vgui_spawnmenu.cpp',
+		'lua_hud.cpp'
 	]
 	if bld.env.DEST_OS == 'win32':
 		libs += ['USER32']
