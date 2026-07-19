@@ -1439,6 +1439,13 @@ static int LuaGameMaxClients( lua_State *state )
 	return 1;
 }
 
+static int LuaGameGravity( lua_State *state )
+{
+	ConVarRef gravity( "sv_gravity", true );
+	lua_pushnumber( state, gravity.IsValid() ? gravity.GetFloat() : 600.0f );
+	return 1;
+}
+
 static int LuaEntityGetFlags( lua_State *state )
 {
 	CBaseEntity *entity = LuaEntityPointer( state, 1 );
@@ -1793,6 +1800,56 @@ static int LuaPlayerIsGrounded( lua_State *state )
 	CBasePlayer *player = ToBasePlayer( LuaEntityPointer( state, 1 ) );
 	lua_pushboolean( state, player && player->GetGroundEntity() != NULL );
 	return 1;
+}
+
+static int LuaPlayerGetGroundEntity( lua_State *state )
+{
+	CBasePlayer *player = ToBasePlayer( LuaEntityPointer( state, 1 ) );
+	if ( !player || !player->GetGroundEntity() )
+		return 0;
+	LuaPushEntity( state, player->GetGroundEntity()->entindex() );
+	return 1;
+}
+
+static int LuaPlayerGetVerticalVelocity( lua_State *state )
+{
+	CBasePlayer *player = ToBasePlayer( LuaEntityPointer( state, 1 ) );
+	if ( !player ) return 0;
+	lua_pushnumber( state, player->GetAbsVelocity().z );
+	return 1;
+}
+
+static int LuaPlayerGetFallSpeed( lua_State *state )
+{
+	CBasePlayer *player = ToBasePlayer( LuaEntityPointer( state, 1 ) );
+	if ( !player ) return 0;
+	float fallSpeed = player->GetGroundEntity() ? 0.0f : -player->GetAbsVelocity().z;
+	lua_pushnumber( state, MAX( 0.0f, fallSpeed ) );
+	return 1;
+}
+
+static int LuaPlayerGetLaggedMovementValue( lua_State *state )
+{
+	CBasePlayer *player = ToBasePlayer( LuaEntityPointer( state, 1 ) );
+	if ( !player ) return 0;
+	lua_pushnumber( state, player->GetLaggedMovementValue() );
+	return 1;
+}
+
+static int LuaPlayerSetLaggedMovementValue( lua_State *state )
+{
+#ifdef CLIENT_DLL
+	(void)state;
+	return luaL_error( state, "player:set_lagged_movement_value is server-only" );
+#else
+	CBasePlayer *player = ToBasePlayer( LuaEntityPointer( state, 1 ) );
+	if ( !player ) return 0;
+	float value = (float)luaL_checknumber( state, 2 );
+	if ( !IsFinite( value ) || value < 0.0f )
+		return luaL_error( state, "player:set_lagged_movement_value expects a finite non-negative number" );
+	player->SetLaggedMovementValue( clamp( value, 0.0f, 4.0f ) );
+	return 0;
+#endif
 }
 
 static int LuaPlayerGetWaterLevel( lua_State *state )
@@ -2682,6 +2739,10 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "userid",       &LuaPlayerGetUserID },
 		{ "buttons",      &LuaPlayerGetButtons },
 		{ "grounded",     &LuaPlayerIsGrounded },
+		{ "ground_entity", &LuaPlayerGetGroundEntity },
+		{ "vertical_velocity", &LuaPlayerGetVerticalVelocity },
+		{ "fall_speed",   &LuaPlayerGetFallSpeed },
+		{ "lagged_movement_value", &LuaPlayerGetLaggedMovementValue },
 		{ "water_level",  &LuaPlayerGetWaterLevel },
 		{ "eye_angles",   &LuaPlayerGetEyeAngles },
 		{ "eye_pos",      &LuaPlayerGetEyePos },
@@ -2698,6 +2759,11 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "SetTeam",      &LuaPlayerSetTeam },
 		{ "Give",         &LuaPlayerGive },
 		{ "IsOnGround",   &LuaPlayerIsGrounded },
+		{ "GetGroundEntity", &LuaPlayerGetGroundEntity },
+		{ "GetVerticalVelocity", &LuaPlayerGetVerticalVelocity },
+		{ "GetFallSpeed", &LuaPlayerGetFallSpeed },
+		{ "GetLaggedMovementValue", &LuaPlayerGetLaggedMovementValue },
+		{ "SetLaggedMovementValue", &LuaPlayerSetLaggedMovementValue },
 		{ "WaterLevel",   &LuaPlayerGetWaterLevel },
 		{ "EyeAngles",    &LuaPlayerGetEyeAngles },
 		{ "EyePos",       &LuaPlayerGetEyePos },
@@ -2826,6 +2892,8 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "GetTime",     &LuaGameTime },
 		{ "GetFrameTime", &LuaGameFrameTime },
 		{ "GetTick",     &LuaGameTick },
+		{ "gravity",      &LuaGameGravity },
+		{ "GetGravity",   &LuaGameGravity },
 		{ NULL, NULL }
 	};
 	lua_newtable( state );

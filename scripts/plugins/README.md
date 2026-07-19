@@ -80,8 +80,14 @@ if p then
     plugin.log(p:userid(), p:flags(), p:move_type())
     plugin.log(p:buttons(), p:grounded(), p:water_level())
     local view = p:eye_angles()
+    plugin.log("vertical", p:vertical_velocity(), "fall speed", p:fall_speed())
+    plugin.log("movement scale", p:lagged_movement_value())
 end
 ```
+
+移动诊断 API：`p:vertical_velocity()` 返回 Z 轴速度，`p:fall_speed()` 返回当前下落速度，
+`p:ground_entity()` 返回脚下实体（没有脚下实体时返回 `nil`）。服务端可以用
+`p:SetLaggedMovementValue(scale)` 调整玩家整体移动时间倍率，范围为 `0` 到 `4`；默认值为 `1`。
 
 ### Mod 实体外观、物理和 KeyValue
 
@@ -158,6 +164,7 @@ local now = plugin.game.time()
 local frameTime = plugin.game.frame_time()
 local tick = plugin.game.tick()
 local maxClients = plugin.game.max_clients()
+local gravity = plugin.game.gravity() -- 当前 sv_gravity
 ```
 
 ## 事件

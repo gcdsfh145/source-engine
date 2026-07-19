@@ -1004,7 +1004,9 @@ float CGameMovement::ComputeConstraintSpeedFactor( void )
 void CGameMovement::CheckParameters( void )
 {
 	float spd = mv->m_flMaxSpeed;
-	float flCurrentSpeed = mv->m_vecVelocity.Length();
+	// Player max speed applies to horizontal movement only. Including Z here
+	// clamps falling velocity and makes the player descend unnaturally slowly.
+	float flCurrentSpeed = mv->m_vecVelocity.Length2D();
 
 	// sv_speedinf: bypass all speed limits
 	extern ConVar sv_speedinf;
@@ -1014,7 +1016,8 @@ void CGameMovement::CheckParameters( void )
 	if ( flCurrentSpeed > spd )
 	{
 		float flScale = spd / flCurrentSpeed;
-		mv->m_vecVelocity *= flScale;
+		mv->m_vecVelocity.x *= flScale;
+		mv->m_vecVelocity.y *= flScale;
 	}
 }
 
