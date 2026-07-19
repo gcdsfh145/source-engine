@@ -1476,10 +1476,13 @@ static int LuaPlayerJump( lua_State *state )
 	}
 
 	ConVarRef gravity( "sv_gravity", true );
+	bool hasCustomHeight = !lua_isnoneornil( state, 3 );
 	float jumpHeight = (float)luaL_optnumber( state, 3, GAMEMOVEMENT_JUMP_HEIGHT );
 	if ( jumpHeight <= 0.0f )
 		return luaL_error( state, "player:jump height must be greater than zero" );
-	float jumpSpeed = sqrtf( 2.0f * ( gravity.IsValid() ? gravity.GetFloat() : 600.0f ) * jumpHeight );
+	float jumpSpeed = hasCustomHeight ?
+		sqrtf( 2.0f * ( gravity.IsValid() ? gravity.GetFloat() : 600.0f ) * jumpHeight ) :
+		GetGameMovementJumpImpulse();
 	Vector velocity = player->GetAbsVelocity();
 	// An air jump is a fresh jump impulse. Using MAX here makes a second jump
 	// weak or invisible when the player is already falling or still rising.

@@ -68,6 +68,22 @@ ConVar debug_latch_reset_onduck( "debug_latch_reset_onduck", "1", FCVAR_CHEAT );
 // [MD] I'll remove this eventually. For now, I want the ability to A/B the optimizations.
 bool g_bMovementOptimizations = true;
 
+float GetGameMovementJumpImpulse()
+{
+	if ( g_bMovementOptimizations )
+	{
+#if defined( HL2_DLL ) || defined( HL2_CLIENT_DLL )
+		Assert( GetCurrentGravity() == 600.0f );
+		return 160.0f;
+#else
+		Assert( GetCurrentGravity() == 800.0f );
+		return 268.3281572999747f;
+#endif
+	}
+
+	return sqrt( 2 * GetCurrentGravity() * GAMEMOVEMENT_JUMP_HEIGHT );
+}
+
 // Roughly how often we want to update the info about the ground surface we're on.
 // We don't need to do this very often.
 #define CATEGORIZE_GROUND_SURFACE_INTERVAL			0.3f
@@ -2329,7 +2345,7 @@ bool CGameMovement::CheckJumpButton( void )
 			if ( g_nJumpCount < sv_jumpset.GetInt() - 1 )
 			{
 				g_nJumpCount++;
-				mv->m_vecVelocity[2] = sqrt(2 * GetCurrentGravity() * GAMEMOVEMENT_JUMP_HEIGHT);
+				mv->m_vecVelocity[2] = GetGameMovementJumpImpulse();
 				mv->m_nOldButtons |= IN_JUMP;
 				return true;
 			}
@@ -2374,22 +2390,7 @@ bool CGameMovement::CheckJumpButton( void )
 		flGroundFactor = player->m_pSurfaceData->game.jumpFactor; 
 	}
 
-	float flMul;
-	if ( g_bMovementOptimizations )
-	{
-#if defined(HL2_DLL) || defined(HL2_CLIENT_DLL)
-		Assert( GetCurrentGravity() == 600.0f );
-		flMul = 160.0f;	// approx. 21 units.
-#else
-		Assert( GetCurrentGravity() == 800.0f );
-		flMul = 268.3281572999747f;
-#endif
-
-	}
-	else
-	{
-		flMul = sqrt(2 * GetCurrentGravity() * GAMEMOVEMENT_JUMP_HEIGHT);
-	}
+	float flMul = GetGameMovementJumpImpulse();
 
 	// Acclerate upward
 	// If we are ducking...
@@ -4870,4 +4871,3 @@ void  CGameMovement::TryTouchGround( const Vector& start, const Vector& end, con
 	ray.Init( start, end, mins, maxs );
 	UTIL_TraceRay( ray, fMask, mv->m_nPlayerHandle.Get(), collisionGroup, &pm );
 }
-

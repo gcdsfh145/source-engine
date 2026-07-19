@@ -50,8 +50,10 @@ void CInputSystem::InitializeTouch( void )
 
 	memset( m_touchAccumX, 0, sizeof(m_touchAccumX) );
 	memset( m_touchAccumY, 0, sizeof(m_touchAccumY) );
+	for ( int i = 0; i < TOUCH_FINGER_MAX_COUNT; ++i )
+		m_touchFingerIds[i] = -1;
 
-	m_bJoystickInitialized = true;
+	m_bTouchInitialized = true;
 	SDL_AddEventWatch(TouchSDLWatcher, this);
 }
 
@@ -61,11 +63,19 @@ void CInputSystem::ShutdownTouch()
 		return;
 
 	SDL_DelEventWatch( TouchSDLWatcher, this );
+	for ( int i = 0; i < TOUCH_FINGER_MAX_COUNT; ++i )
+		m_touchFingerIds[i] = -1;
 	m_bTouchInitialized = false;
 }
 
 bool CInputSystem::GetTouchAccumulators( int fingerId, float &dx, float &dy )
 {
+	if ( fingerId < 0 || fingerId >= TOUCH_FINGER_MAX_COUNT )
+	{
+		dx = dy = 0.f;
+		return false;
+	}
+
 	dx = m_touchAccumX[fingerId];
 	dy = m_touchAccumY[fingerId];
 
@@ -74,25 +84,51 @@ bool CInputSystem::GetTouchAccumulators( int fingerId, float &dx, float &dy )
 	return true;
 }
 
-void CInputSystem::FingerEvent(int eventType, int fingerId, float x, float y, float dx, float dy)
+void CInputSystem::FingerEvent(int eventType, int64 fingerId, float x, float y, float dx, float dy)
 {
-	if( fingerId >= TOUCH_FINGER_MAX_COUNT )
+	const int64 sdlFingerId = fingerId;
+	int mappedFinger = -1;
+	for ( int i = 0; i < TOUCH_FINGER_MAX_COUNT; ++i )
+	{
+		if ( m_touchFingerIds[i] == sdlFingerId )
+		{
+			mappedFinger = i;
+			break;
+		}
+	}
+
+	if ( mappedFinger < 0 && eventType == IE_FingerDown )
+	{
+		for ( int i = 0; i < TOUCH_FINGER_MAX_COUNT; ++i )
+		{
+			if ( m_touchFingerIds[i] == -1 )
+			{
+				m_touchFingerIds[i] = sdlFingerId;
+				mappedFinger = i;
+				break;
+			}
+		}
+	}
+
+	if ( mappedFinger < 0 )
 		return;
 
 	if( eventType == IE_FingerUp )
 	{
-		m_touchAccumX[fingerId] = 0.f;
-		m_touchAccumY[fingerId] = 0.f;
+		m_touchAccumX[mappedFinger] = 0.f;
+		m_touchAccumY[mappedFinger] = 0.f;
 	}
 	else
 	{
-		m_touchAccumX[fingerId] += dx;
-		m_touchAccumY[fingerId] += dy;
+		m_touchAccumX[mappedFinger] += dx;
+		m_touchAccumY[mappedFinger] += dy;
 	}
 
 	int _x,_y;
 	memcpy( &_x, &x, sizeof(float) );
 	memcpy( &_y, &y, sizeof(float) );
-	PostEvent(eventType, m_nLastSampleTick, fingerId, _x, _y);
-}
+	PostEvent(eventType, m_nLastSampleTick, mappedFinger, _x, _y);
 
+	if ( eventType == IE_FingerUp )
+		m_touchFingerIds[mappedFinger] = -1;
+}

@@ -1901,7 +1901,10 @@ FORCEINLINE void GLMContext::DrawRangeElements(	GLenum mode, GLuint start, GLuin
 		// do the drawing
 		if (hasVP && hasFP)
 		{
-			gGL->glDrawRangeElementsBaseVertex( mode, start, end, count, type, indicesActual, baseVertex );
+			if ( gGL->glDrawRangeElementsBaseVertex )
+				gGL->glDrawRangeElementsBaseVertex( mode, start, end, count, type, indicesActual, baseVertex );
+			else
+				gGL->glDrawRangeElements( mode, start, end, count, type, indicesActual );
 
 			if ( m_slowCheckEnable )
 			{
@@ -1916,7 +1919,10 @@ FORCEINLINE void GLMContext::DrawRangeElements(	GLenum mode, GLuint start, GLuin
 
 	if ( m_pBoundPair )
 	{
-		gGL->glDrawRangeElementsBaseVertex( mode, start, end, count, type, indicesActual, baseVertex );
+		if ( gGL->glDrawRangeElementsBaseVertex )
+			gGL->glDrawRangeElementsBaseVertex( mode, start, end, count, type, indicesActual, baseVertex );
+		else
+			gGL->glDrawRangeElements( mode, start, end, count, type, indicesActual );
 
 #if GLMDEBUG
 		if ( m_slowCheckEnable )
