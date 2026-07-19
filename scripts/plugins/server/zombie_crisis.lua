@@ -79,6 +79,32 @@ local specialHealth = {
     tank = 1400
 }
 
+local specialModel = {
+    hunter = "models/zombie/fast.mdl",
+    smoker = "models/zombie/classic.mdl",
+    boomer = "models/zombie/poison.mdl",
+    charger = "models/zombie/zombine.mdl",
+    spitter = "models/zombie/poison.mdl",
+    jockey = "models/zombie/fast.mdl",
+    witch = "models/zombie/poison.mdl",
+    tank = "models/zombie/zombie_soldier.mdl"
+}
+
+local specialColor = {
+    hunter = {70, 150, 255, 255},
+    smoker = {170, 170, 190, 255},
+    boomer = {120, 255, 90, 255},
+    charger = {255, 150, 60, 255},
+    spitter = {90, 255, 160, 255},
+    jockey = {255, 100, 220, 255},
+    witch = {255, 230, 120, 255},
+    tank = {255, 70, 70, 255}
+}
+
+for _, model in pairs(specialModel) do
+    util.PrecacheModel(model)
+end
+
 local function alivePlayers()
     local result = {}
     for _, ply in ipairs(player.GetAll()) do
@@ -135,17 +161,46 @@ local function sendStatus()
 
     local players = alivePlayers()
     local living = countLivingZombies()
-    net.Start("zombie_crisis_hud")
-    net.WriteInt(mode, 8)
-    net.WriteInt(wave, 16)
-    net.WriteInt(living, 16)
-    net.WriteInt(#players, 8)
-    for _, ply in ipairs(players) do
-        net.WriteString(ply:Nick())
-        net.WriteInt(ply:Health(), 16)
-        net.WriteInt(ply:GetMaxHealth(), 16)
+    local specialCounts = {}
+    for index, kind in pairs(specialByIndex) do
+        if zombies[index] and zombies[index]:IsValid() then
+            specialCounts[kind] = (specialCounts[kind] or 0) + 1
+        end
     end
-    net.Send()
+    local specialList = {}
+    for _, kind in ipairs(specialTypes) do
+        if specialCounts[kind] then
+            specialList[#specialList + 1] = string.upper(kind) .. " x" .. tostring(specialCounts[kind])
+        end
+    end
+    local specialText = #specialList > 0 and table.concat(specialList, ", ") or "none"
+    local goal = goalPosition()
+
+    -- Direction is sent per player so each client gets a useful compass hint.
+    for _, receiver in ipairs(players) do
+        local delta = goal - receiver:GetPos()
+        local distance = delta:Length()
+        local targetYaw = math.deg(math.atan2(delta.y, delta.x))
+        local playerYaw = receiver:EyeAngles().y
+        local heading = targetYaw - playerYaw
+        while heading > 180 do heading = heading - 360 end
+        while heading < -180 do heading = heading + 360 end
+
+        net.Start("zombie_crisis_hud")
+        net.WriteInt(mode, 8)
+        net.WriteInt(wave, 16)
+        net.WriteInt(living, 16)
+        net.WriteString(specialText)
+        net.WriteFloat(distance)
+        net.WriteFloat(heading)
+        net.WriteInt(#players, 8)
+        for _, ply in ipairs(players) do
+            net.WriteString(ply:Nick())
+            net.WriteInt(ply:Health(), 16)
+            net.WriteInt(ply:GetMaxHealth(), 16)
+        end
+        net.Send(receiver)
+    end
 end
 
 local function announce(text)
@@ -211,6 +266,8 @@ local function spawnZombie(classname, kind)
         ent:SetHealth(specialHealth[kind] or 250)
         ent:SetMaxHealth(specialHealth[kind] or 250)
         ent:SetName("zombie_crisis_" .. kind)
+        if specialModel[kind] then ent:SetModel(specialModel[kind]) end
+        if specialColor[kind] then ent:SetColor(unpack(specialColor[kind])) end
         if kind == "tank" then
             ent:SetModelScale(1.45, 0.2)
         elseif kind == "witch" then
@@ -248,7 +305,7 @@ local function startGame()
     wave = 1
     waveEndsAt = plugin.game.time() + 45
     nextCommonSpawn = plugin.game.time() + 2
-    nextSpecialSpawn = plugin.game.time() + 30
+    nextSpecialSpawn = plugin.game.time() + 12
     findGoal()
     for _, ply in ipairs(players) do
         ply:Give("weapon_smg1")
@@ -388,7 +445,7 @@ hook.Add("Think", "zombie_crisis_director", function()
 
     if now >= nextSpecialSpawn and living < maxAlive then
         spawnSpecial()
-        nextSpecialSpawn = now + math.max(25, 75 - wave * 2)
+        nextSpecialSpawn = now + math.max(20, 55 - wave * 2)
     end
 
     for index, ent in pairs(zombies) do
