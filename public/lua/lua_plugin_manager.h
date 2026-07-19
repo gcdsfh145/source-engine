@@ -48,7 +48,8 @@ public:
 	void ClientPutInServer( int entIndex, const char *playerName );
 	void ClientDisconnect( int entIndex );
 	bool PlayerSay( int entIndex, const char *text );
-	void NetworkMessage( const char *name, const char *payload );
+	void SetupMove( int entIndex, int &buttons, float &forwardMove, float &sideMove, float &upMove );
+	void NetworkMessage( const char *name, const char *payload, int senderIndex = -1 );
 	bool RegisterNetworkReceiver( struct lua_State *state, const char *name, int functionIndex );
 	void NetworkStart( const char *name );
 	bool NetworkWriteString( const char *value );

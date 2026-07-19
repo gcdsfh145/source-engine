@@ -13,12 +13,17 @@
 
 class edict_t;
 class CBaseEntity;
+class CBasePlayer;
+class CMoveData;
 class CTakeDamageInfo;
+
+void LuaPluginSetupMove( CBasePlayer *player, CMoveData *move );
 
 #ifndef CLIENT_DLL
 void LuaServerPluginClientPutInServer( edict_t *entity, const char *playerName );
 void LuaServerPluginClientDisconnect( edict_t *entity );
 bool LuaServerPluginPlayerSay( CBaseEntity *player, const char *text );
+void LuaServerPluginClientNetworkMessage( CBaseEntity *player, const char *name, const char *payload );
 bool LuaServerPluginEntityTakeDamage( CBaseEntity *entity, const CTakeDamageInfo &info );
 #endif
 

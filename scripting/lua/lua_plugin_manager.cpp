@@ -116,6 +116,7 @@ static void NormalizeLuaHookName( const char *hookName, char *name, int nameSize
 		{ "WeaponFire", "weapon_fire" },
 		{ "PlayerTeam", "player_team" },
 		{ "PlayerSay", "player_say" },
+		{ "SetupMove", "setup_move" },
 		{ "PlayerUse", "player_use" },
 		{ "EntityTakeDamage", "entity_take_damage" },
 		{ "EntityCreated", "entity_created" },
@@ -1280,7 +1281,60 @@ bool CLuaPluginManager::PlayerSay( int entIndex, const char *text )
 	return allow;
 }
 
-void CLuaPluginManager::NetworkMessage( const char *name, const char *payload )
+void CLuaPluginManager::SetupMove( int entIndex, int &buttons, float &forwardMove,
+	float &sideMove, float &upMove )
+{
+	if ( !m_state )
+		return;
+
+	lua_State *state = (lua_State *)m_state;
+	for ( int i = 0; i < m_events.Count(); ++i )
+	{
+		LuaEvent *event = m_events[i];
+		if ( Q_stricmp( event->name, "setup_move" ) || !event->identifier[0] ||
+			event->plugin->faulted )
+			continue;
+		if ( !BeginScriptCallback() )
+			break;
+
+		LuaPlugin *plugin = event->plugin;
+		int functionRef = event->functionRef;
+		lua_rawgeti( state, LUA_REGISTRYINDEX, functionRef );
+		LuaPushHookPlayer( state, entIndex, false );
+		lua_pushinteger( state, buttons );
+		lua_pushnumber( state, forwardMove );
+		lua_pushnumber( state, sideMove );
+		lua_pushnumber( state, upMove );
+		LuaPlugin *previousPlugin = m_currentPlugin;
+		m_currentPlugin = plugin;
+		int result = lua_pcall( state, 5, 1, 0 );
+		m_currentPlugin = previousPlugin;
+		if ( result != 0 )
+		{
+			RecordPluginError( plugin, "SetupMove" );
+			LuaReportError( state, "SetupMove" );
+			continue;
+		}
+		if ( lua_istable( state, -1 ) )
+		{
+			lua_getfield( state, -1, "buttons" );
+			if ( lua_isnumber( state, -1 ) ) buttons = (int)lua_tointeger( state, -1 );
+			lua_pop( state, 1 );
+			lua_getfield( state, -1, "forward" );
+			if ( lua_isnumber( state, -1 ) ) forwardMove = (float)lua_tonumber( state, -1 );
+			lua_pop( state, 1 );
+			lua_getfield( state, -1, "side" );
+			if ( lua_isnumber( state, -1 ) ) sideMove = (float)lua_tonumber( state, -1 );
+			lua_pop( state, 1 );
+			lua_getfield( state, -1, "up" );
+			if ( lua_isnumber( state, -1 ) ) upMove = (float)lua_tonumber( state, -1 );
+			lua_pop( state, 1 );
+		}
+		lua_pop( state, 1 );
+	}
+}
+
+void CLuaPluginManager::NetworkMessage( const char *name, const char *payload, int senderIndex )
 {
 	if ( !m_state || !name )
 		return;
@@ -1309,9 +1363,13 @@ void CLuaPluginManager::NetworkMessage( const char *name, const char *payload )
 			lua_pushstring( state, name );
 			lua_pushstring( state, payload ? payload : "" );
 		}
+		else if ( senderIndex >= 0 )
+		{
+			LuaPushHookPlayer( state, senderIndex, false );
+		}
 		LuaPlugin *previousPlugin = m_currentPlugin;
 		m_currentPlugin = plugin;
-		int result = lua_pcall( state, event->identifier[0] ? 0 : 2, 0, 0 );
+		int result = lua_pcall( state, event->identifier[0] ? ( senderIndex >= 0 ? 1 : 0 ) : 2, 0, 0 );
 		m_currentPlugin = previousPlugin;
 		if ( result != 0 )
 		{

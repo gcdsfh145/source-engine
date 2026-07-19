@@ -69,6 +69,15 @@ static CLuaPluginManager *LuaGamePluginManager()
 #endif
 }
 
+void LuaPluginSetupMove( CBasePlayer *player, CMoveData *move )
+{
+	CLuaPluginManager *manager = LuaGamePluginManager();
+	if ( !manager || !player || !move )
+		return;
+	manager->SetupMove( player->entindex(), move->m_nButtons, move->m_flForwardMove,
+		move->m_flSideMove, move->m_flUpMove );
+}
+
 #ifdef CLIENT_DLL
 #define CLuaWeaponEntity C_LuaWeaponEntity
 #endif
@@ -1307,12 +1316,29 @@ static int LuaWeaponGetNextPrimaryAttack( lua_State *state )
 	return 1;
 }
 
+static int LuaWeaponGetNextSecondaryAttack( lua_State *state )
+{
+	CBaseCombatWeapon *weapon = LuaWeaponPointer( state, 1 );
+	if ( !weapon ) return 0;
+	lua_pushnumber( state, weapon->m_flNextSecondaryAttack );
+	return 1;
+}
+
 static int LuaWeaponSetNextPrimaryAttack( lua_State *state )
 {
 	CBaseCombatWeapon *weapon = LuaWeaponPointer( state, 1 );
 	if ( !weapon ) return 0;
 	float delay = (float)luaL_checknumber( state, 2 );
 	weapon->m_flNextPrimaryAttack = gpGlobals->curtime + MAX( 0.0f, delay );
+	return 0;
+}
+
+static int LuaWeaponSetNextSecondaryAttack( lua_State *state )
+{
+	CBaseCombatWeapon *weapon = LuaWeaponPointer( state, 1 );
+	if ( !weapon ) return 0;
+	float delay = (float)luaL_checknumber( state, 2 );
+	weapon->m_flNextSecondaryAttack = gpGlobals->curtime + MAX( 0.0f, delay );
 	return 0;
 }
 
@@ -2055,6 +2081,56 @@ static int LuaPlayerChatPrint( lua_State *state )
 #endif
 }
 
+static int LuaChatSend( lua_State *state )
+{
+#ifdef CLIENT_DLL
+	(void)state;
+	return luaL_error( state, "chat.send is server-only" );
+#else
+	CBasePlayer *player = ToBasePlayer( LuaEntityPointer( state, 1 ) );
+	const char *message = luaL_checkstring( state, 2 );
+	if ( !player )
+	{
+		lua_pushboolean( state, 0 );
+		return 1;
+	}
+	ClientPrint( player, HUD_PRINTTALK, message );
+	lua_pushboolean( state, 1 );
+	return 1;
+#endif
+}
+
+static int LuaChatBroadcast( lua_State *state )
+{
+#ifdef CLIENT_DLL
+	(void)state;
+	return luaL_error( state, "chat.broadcast is server-only" );
+#else
+	if ( s_LuaServerManager && !s_LuaServerManager->HasPermission( "chat.broadcast" ) )
+		return luaL_error( state, "plugin permission denied: chat.broadcast" );
+	const char *message = luaL_checkstring( state, 1 );
+	CBasePlayer *sender = NULL;
+	if ( lua_gettop( state ) >= 2 && !lua_isnil( state, 2 ) )
+		sender = ToBasePlayer( LuaEntityPointer( state, 2 ) );
+	UTIL_SayTextAll( message, sender, true );
+	lua_pushboolean( state, 1 );
+	return 1;
+#endif
+}
+
+static int LuaChatSystem( lua_State *state )
+{
+#ifdef CLIENT_DLL
+	(void)state;
+	return luaL_error( state, "chat.system is server-only" );
+#else
+	if ( s_LuaServerManager && !s_LuaServerManager->HasPermission( "chat.broadcast" ) )
+		return luaL_error( state, "plugin permission denied: chat.broadcast" );
+	UTIL_ClientPrintAll( HUD_PRINTTALK, luaL_checkstring( state, 1 ) );
+	return 0;
+#endif
+}
+
 static int LuaPlayerGetMaxHealth( lua_State *state )
 {
 	CBasePlayer *player = ToBasePlayer( LuaEntityPointer( state, 1 ) );
@@ -2541,6 +2617,10 @@ static int LuaNetReceive( lua_State *state )
 	CLuaPluginManager *manager = LuaGamePluginManager();
 	const char *name = luaL_checkstring( state, 1 );
 	luaL_checktype( state, 2, LUA_TFUNCTION );
+#ifndef CLIENT_DLL
+	if ( s_LuaServerManager && !s_LuaServerManager->HasPermission( "net.receive" ) )
+		return luaL_error( state, "plugin permission denied: net.receive" );
+#endif
 	if ( !manager || !manager->RegisterNetworkReceiver( state, name, 2 ) )
 		return luaL_error( state, "net.Receive could not register '%s'", name );
 	return 0;
@@ -2614,8 +2694,10 @@ static int LuaNetSendEntity( lua_State *state )
 static int LuaNetStart( lua_State *state )
 {
 #ifdef CLIENT_DLL
-	(void)state;
-	return luaL_error( state, "net.Start is server-only" );
+	if ( !s_LuaClientManager )
+		return luaL_error( state, "net.Start is unavailable" );
+	s_LuaClientManager->NetworkStart( luaL_checkstring( state, 1 ) );
+	return 0;
 #else
 	if ( !s_LuaServerManager || !s_LuaServerManager->HasPermission( "net.send" ) )
 		return luaL_error( state, "plugin permission denied: net.send" );
@@ -2627,7 +2709,8 @@ static int LuaNetStart( lua_State *state )
 static int LuaNetWriteString( lua_State *state )
 {
 #ifdef CLIENT_DLL
-	(void)state; return luaL_error( state, "net.WriteString is server-only" );
+	if ( !s_LuaClientManager->NetworkWriteString( luaL_checkstring( state, 1 ) ) ) return luaL_error( state, "network buffer is full" );
+	return 0;
 #else
 	if ( !s_LuaServerManager->NetworkWriteString( luaL_checkstring( state, 1 ) ) ) return luaL_error( state, "network buffer is full" );
 	return 0;
@@ -2637,7 +2720,8 @@ static int LuaNetWriteString( lua_State *state )
 static int LuaNetWriteInt( lua_State *state )
 {
 #ifdef CLIENT_DLL
-	(void)state; return luaL_error( state, "net.WriteInt is server-only" );
+	if ( !s_LuaClientManager->NetworkWriteInt( (int)luaL_checkinteger( state, 1 ) ) ) return luaL_error( state, "network buffer is full" );
+	return 0;
 #else
 	if ( !s_LuaServerManager->NetworkWriteInt( (int)luaL_checkinteger( state, 1 ) ) ) return luaL_error( state, "network buffer is full" );
 	return 0;
@@ -2647,7 +2731,8 @@ static int LuaNetWriteInt( lua_State *state )
 static int LuaNetWriteFloat( lua_State *state )
 {
 #ifdef CLIENT_DLL
-	(void)state; return luaL_error( state, "net.WriteFloat is server-only" );
+	if ( !s_LuaClientManager->NetworkWriteFloat( (float)luaL_checknumber( state, 1 ) ) ) return luaL_error( state, "network buffer is full" );
+	return 0;
 #else
 	if ( !s_LuaServerManager->NetworkWriteFloat( (float)luaL_checknumber( state, 1 ) ) ) return luaL_error( state, "network buffer is full" );
 	return 0;
@@ -2657,7 +2742,8 @@ static int LuaNetWriteFloat( lua_State *state )
 static int LuaNetWriteBool( lua_State *state )
 {
 #ifdef CLIENT_DLL
-	(void)state; return luaL_error( state, "net.WriteBool is server-only" );
+	if ( !s_LuaClientManager->NetworkWriteBool( lua_toboolean( state, 1 ) != 0 ) ) return luaL_error( state, "network buffer is full" );
+	return 0;
 #else
 	if ( !s_LuaServerManager->NetworkWriteBool( lua_toboolean( state, 1 ) != 0 ) ) return luaL_error( state, "network buffer is full" );
 	return 0;
@@ -2667,7 +2753,10 @@ static int LuaNetWriteBool( lua_State *state )
 static int LuaNetWriteVector( lua_State *state )
 {
 #ifdef CLIENT_DLL
-	(void)state; return luaL_error( state, "net.WriteVector is server-only" );
+	Vector value;
+	if ( !LuaReadVector( state, 1, value ) ) return luaL_error( state, "net.WriteVector expects a vector table" );
+	if ( !s_LuaClientManager->NetworkWriteVector( value.x, value.y, value.z ) ) return luaL_error( state, "network buffer is full" );
+	return 0;
 #else
 	Vector value;
 	if ( !LuaReadVector( state, 1, value ) ) return luaL_error( state, "net.WriteVector expects a vector table" );
@@ -2679,7 +2768,8 @@ static int LuaNetWriteVector( lua_State *state )
 static int LuaNetWriteEntity( lua_State *state )
 {
 #ifdef CLIENT_DLL
-	(void)state; return luaL_error( state, "net.WriteEntity is server-only" );
+	if ( !s_LuaClientManager->NetworkWriteEntity( LuaEntityIndex( state, 1 ) ) ) return luaL_error( state, "network buffer is full" );
+	return 0;
 #else
 	if ( !s_LuaServerManager->NetworkWriteEntity( LuaEntityIndex( state, 1 ) ) ) return luaL_error( state, "network buffer is full" );
 	return 0;
@@ -2689,7 +2779,18 @@ static int LuaNetWriteEntity( lua_State *state )
 static int LuaNetSendMessage( lua_State *state )
 {
 #ifdef CLIENT_DLL
-	(void)state; return luaL_error( state, "net.Send is server-only" );
+	if ( !s_LuaClientManager || !s_LuaClientManager->NetworkWriteName()[0] )
+		return luaL_error( state, "net.SendToServer called without net.Start" );
+	const char *name = s_LuaClientManager->NetworkWriteName();
+	const char *payload = s_LuaClientManager->NetworkWritePayload();
+	if ( strchr( name, '"' ) || strchr( name, '\\' ) || strchr( name, '\n' ) ||
+		strchr( payload, '"' ) || strchr( payload, '\\' ) || strchr( payload, '\n' ) )
+		return luaL_error( state, "net.SendToServer payload contains an unsupported command character" );
+	char command[4200];
+	Q_snprintf( command, sizeof( command ), "lua_net_client \"%s\" \"%s\"\n", name, payload );
+	engine->ServerCmd( command, true );
+	lua_pushboolean( state, 1 );
+	return 1;
 #else
 	if ( !s_LuaServerManager || !s_LuaServerManager->NetworkWriteName()[0] )
 		return luaL_error( state, "net.Send called without net.Start" );
@@ -2881,6 +2982,8 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "GetPrimaryAmmoType", &LuaWeaponGetAmmoType },
 		{ "GetNextPrimaryFire", &LuaWeaponGetNextPrimaryAttack },
 		{ "SetNextPrimaryFire", &LuaWeaponSetNextPrimaryAttack },
+		{ "GetNextSecondaryFire", &LuaWeaponGetNextSecondaryAttack },
+		{ "SetNextSecondaryFire", &LuaWeaponSetNextSecondaryAttack },
 		{ "Reload",       &LuaWeaponReload },
 		{ "FireBullets",  &LuaWeaponFireBullets },
 		{ "GetWeapons",   &LuaPlayerGetWeapons },
@@ -3018,6 +3121,19 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 	lua_newtable( state );
 	luaL_register( state, NULL, hudFunctions );
 	lua_setfield( state, -2, "hud" );
+	static const luaL_Reg chatFunctions[] =
+	{
+		{ "send",      &LuaChatSend },
+		{ "broadcast", &LuaChatBroadcast },
+		{ "system",    &LuaChatSystem },
+		{ NULL, NULL }
+	};
+	lua_newtable( state );
+	luaL_register( state, NULL, chatFunctions );
+	lua_setfield( state, -2, "chat" );
+	lua_getfield( state, -1, "chat" );
+	lua_setglobal( state, "chat" );
+	lua_pop( state, 1 );
 	static const luaL_Reg netFunctions[] =
 	{
 		{ "send", &LuaNetSend },
@@ -3034,6 +3150,7 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "WriteVector", &LuaNetWriteVector },
 		{ "WriteEntity", &LuaNetWriteEntity },
 		{ "Send", &LuaNetSendMessage },
+		{ "SendToServer", &LuaNetSendMessage },
 		{ "ReadString", &LuaNetReadString },
 		{ "ReadInt", &LuaNetReadInt },
 		{ "ReadFloat", &LuaNetReadFloat },
@@ -3375,6 +3492,13 @@ bool LuaServerPluginPlayerSay( CBaseEntity *player, const char *text )
 	if ( !s_LuaServerManager || !player )
 		return true;
 	return s_LuaServerManager->PlayerSay( player->entindex(), text );
+}
+
+void LuaServerPluginClientNetworkMessage( CBaseEntity *player, const char *name, const char *payload )
+{
+	if ( !s_LuaServerManager || !player || !name || !name[0] )
+		return;
+	s_LuaServerManager->NetworkMessage( name, payload, player->entindex() );
 }
 
 bool LuaServerPluginEntityTakeDamage( CBaseEntity *entity, const CTakeDamageInfo &info )

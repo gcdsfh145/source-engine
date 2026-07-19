@@ -10,6 +10,7 @@
 #include <stdarg.h>
 #include "movevars_shared.h"
 #include "convar.h"
+#include "lua_plugin_system.h"
 
 ConVar sv_speedinf( "sv_speedinf", "0", FCVAR_REPLICATED | FCVAR_CHEAT, "Enable infinite speed stacking (Bhop)." );
 ConVar sv_autobhop( "sv_autobhop", "0", FCVAR_REPLICATED | FCVAR_CHEAT, "Enable automatic bunnyhopping." );
@@ -1092,6 +1093,7 @@ void CGameMovement::ProcessMovement( CBasePlayer *pPlayer, CMoveData *pMove )
 
 	mv = pMove;
 	mv->m_flMaxSpeed = pPlayer->GetPlayerMaxSpeed();
+	LuaPluginSetupMove( pPlayer, mv );
 
 	// CheckV( player->CurrentCommandNumber(), "StartPos", mv->GetAbsOrigin() );
 

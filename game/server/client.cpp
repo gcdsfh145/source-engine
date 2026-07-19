@@ -1464,6 +1464,13 @@ void ClientCommand( CBasePlayer *pPlayer, const CCommand &args )
 	if ( !pPlayer )
 		return;
 
+	if ( FStrEq( pCmd, "lua_net_client" ) )
+	{
+		if ( args.ArgC() >= 3 && Q_strlen( args[1] ) < 120 && Q_strlen( args[2] ) < 4000 )
+			LuaServerPluginClientNetworkMessage( pPlayer, args[1], args[2] );
+		return;
+	}
+
 	MDLCACHE_CRITICAL_SECTION();
 
 	/*
