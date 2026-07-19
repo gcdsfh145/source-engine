@@ -474,10 +474,16 @@ void CAI_ScriptConditions::EvaluationThink()
 	int iActorsDone = 0;
 
 #ifdef HL2_DLL
-	if( AI_GetSinglePlayer()->GetFlags() & FL_NOTARGET )
+	// The condition entity can think while a level is loading or before the
+	// single-player client has been created.  AI_GetSinglePlayer() is allowed
+	// to return NULL during those phases.
+	CBasePlayer *pPlayer = AI_GetSinglePlayer();
+	if( pPlayer && ( pPlayer->GetFlags() & FL_NOTARGET ) )
 	{
 		ScrCondDbgMsg( ("%s WARNING: Player is NOTARGET. This will affect all LOS conditiosn involving the player!\n", GetDebugName()) );
 	}
+#else
+	CBasePlayer *pPlayer = GetPlayer();
 #endif
 
 
@@ -533,7 +539,7 @@ void CAI_ScriptConditions::EvaluationThink()
 		EvalArgs_t args =
 		{
 			pActor,
-			GetPlayer(),
+			pPlayer,
 			m_hTarget.Get()
 		};
 
