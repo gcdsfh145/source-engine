@@ -13,7 +13,7 @@ scripts/plugins/client/
 plugin.log("hello", 123)
 local role = plugin.role() -- "server" 或 "client"
 plugin.execute("say hello")
-local now = plugin.time()
+local now = plugin.game.time()
 ```
 
 ## 定时器

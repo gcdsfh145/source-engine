@@ -129,7 +129,7 @@ local function goalPosition()
 end
 
 local function sendStatus()
-    local now = plugin.time()
+    local now = plugin.game.time()
     if now < nextHudUpdate then return end
     nextHudUpdate = now + 0.5
 
@@ -246,9 +246,9 @@ local function startGame()
     started = true
     mode = MODE_TRAVEL
     wave = 1
-    waveEndsAt = plugin.time() + 45
-    nextCommonSpawn = plugin.time() + 2
-    nextSpecialSpawn = plugin.time() + 30
+    waveEndsAt = plugin.game.time() + 45
+    nextCommonSpawn = plugin.game.time() + 2
+    nextSpecialSpawn = plugin.game.time() + 30
     findGoal()
     for _, ply in ipairs(players) do
         ply:Give("weapon_smg1")
@@ -343,7 +343,7 @@ hook.Add("PlayerDeath", "zombie_crisis_team_wipe", function(victim, attacker)
 end)
 
 hook.Add("Think", "zombie_crisis_director", function()
-    local now = plugin.time()
+    local now = plugin.game.time()
     local players = livingPlayers()
     if not started then
         sendStatus()

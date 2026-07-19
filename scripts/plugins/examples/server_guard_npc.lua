@@ -24,7 +24,7 @@ npcs.Register("npc_lua_guard", {
         guard:SetEnemy(target)
         if plugin.vector.distance(guard:GetPos(), target:GetPos()) > 700 then return end
 
-        local now = plugin.time()
+        local now = plugin.game.time()
         if (nextAttack[index] or 0) > now then return end
         local trace = util.TraceLine(guard:GetPos(), target:EyePos(), guard)
         if trace.Entity and trace.Entity:IsValid() then
