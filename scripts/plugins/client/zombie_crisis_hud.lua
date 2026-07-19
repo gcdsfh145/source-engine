@@ -1,4 +1,4 @@
--- Client HUD for Zombie Crisis. Copy to scripts/plugins/client/.
+-- Client HUD for Zombie Crisis. Loaded automatically from scripts/plugins/client/.
 local panelId = "zombie_crisis_panel"
 local titleId = "zombie_crisis_title"
 local waveId = "zombie_crisis_wave"
@@ -51,6 +51,9 @@ net.Receive("zombie_crisis_hud", function()
     end
     draw(mode, wave, infected, players)
 end)
+
+-- Draw a visible waiting state even before the server sends its first update.
+draw(0, 0, 0, {})
 
 plugin.on("level_init", function()
     plugin.hud.remove(panelId)

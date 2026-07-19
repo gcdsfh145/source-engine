@@ -197,9 +197,9 @@ util.ScreenShake(Vector(0, 0, 64), 12, 150, 0.8, 600, true)
 
 ## Zombie Crisis 示例模式
 
-`scripts/plugins/examples/server/zombie_crisis.lua` 是完整的合作逃生模式，
-客户端 HUD 在 `scripts/plugins/examples/client/zombie_crisis_hud.lua`。将两个文件分别
-复制到 `server/` 和 `client/` 后加载：
+`scripts/plugins/server/zombie_crisis.lua` 是完整的合作逃生模式，客户端 HUD 在
+`scripts/plugins/client/zombie_crisis_hud.lua`。两个文件位于正式插件目录，启动时会自动加载。
+也可以手动重新加载：
 
 ```text
 lua_server_load zombie_crisis.lua

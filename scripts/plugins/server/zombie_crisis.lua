@@ -1,5 +1,5 @@
 -- Zombie Crisis: a cooperative escape mode inspired by horde-survival games.
--- Copy this file to scripts/plugins/server/ to enable it.
+-- This file is loaded automatically from scripts/plugins/server/.
 -- Map authors can place an info_target named zombie_crisis_exit as the goal.
 plugin.Manifest({
     version = "1.0.0",
@@ -336,7 +336,7 @@ hook.Add("PlayerSay", "zombie_crisis_commands", function(ply, text)
     end
 end)
 
-hook.Add("PlayerDeath", "zombie_crisis_team_wipe", function()
+hook.Add("PlayerDeath", "zombie_crisis_team_wipe", function(victim, attacker)
     if started and #livingPlayers() == 0 then
         stopGame("All survivors were lost. Use /zstart to retry.")
     end
