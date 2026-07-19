@@ -1107,6 +1107,35 @@ static int LuaEntityGetHealth( lua_State *state )
 	return 1;
 }
 
+static int LuaEntityGetMaxHealth( lua_State *state )
+{
+	CBaseEntity *entity = LuaEntityPointer( state, 1 );
+	if ( !entity ) return 0;
+	lua_pushinteger( state, entity->GetMaxHealth() );
+	return 1;
+}
+
+static int LuaEntitySetMaxHealth( lua_State *state )
+{
+#ifdef CLIENT_DLL
+	(void)state;
+	return luaL_error( state, "entity:SetMaxHealth is server-only" );
+#else
+	CBaseEntity *entity = LuaEntityPointer( state, 1 );
+	int maxHealth = (int)luaL_checkinteger( state, 2 );
+	if ( !entity || maxHealth <= 0 )
+	{
+		lua_pushboolean( state, 0 );
+		return 1;
+	}
+	entity->m_iMaxHealth = maxHealth;
+	if ( entity->GetHealth() > maxHealth )
+		entity->SetHealth( maxHealth );
+	lua_pushboolean( state, 1 );
+	return 1;
+#endif
+}
+
 static int LuaEntitySetHealth( lua_State *state )
 {
 #ifdef CLIENT_DLL
@@ -3057,6 +3086,8 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "GetAttachment", &LuaEntityGetAttachment },
 		{ "health",       &LuaEntityGetHealth },
 		{ "set_health",   &LuaEntitySetHealth },
+		{ "max_health",   &LuaEntityGetMaxHealth },
+		{ "set_max_health", &LuaEntitySetMaxHealth },
 		{ "team",         &LuaEntityGetTeam },
 		{ "GetName",      &LuaEntityGetTargetName },
 		{ "SetName",      &LuaEntitySetTargetName },
@@ -3121,8 +3152,8 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "Spawn",        &LuaPlayerSpawn },
 		{ "Kill",         &LuaPlayerKill },
 		{ "ChatPrint",    &LuaPlayerChatPrint },
-		{ "GetMaxHealth", &LuaPlayerGetMaxHealth },
-		{ "SetMaxHealth", &LuaPlayerSetMaxHealth },
+		{ "GetMaxHealth", &LuaEntityGetMaxHealth },
+		{ "SetMaxHealth", &LuaEntitySetMaxHealth },
 		{ "Armor",        &LuaPlayerGetArmor },
 		{ "SetArmor",     &LuaPlayerSetArmor },
 		{ "StripWeapons", &LuaPlayerStripWeapons },

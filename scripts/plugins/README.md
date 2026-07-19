@@ -195,6 +195,31 @@ util.ScreenShake(Vector(0, 0, 64), 12, 150, 0.8, 600, true)
 完整的成长、技能、自定义武器和 NPC 组合示例见
 `scripts/plugins/examples/server/rpg_mod_foundation.lua`。
 
+## Zombie Crisis 示例模式
+
+`scripts/plugins/examples/server/zombie_crisis.lua` 是完整的合作逃生模式，
+客户端 HUD 在 `scripts/plugins/examples/client/zombie_crisis_hud.lua`。将两个文件分别
+复制到 `server/` 和 `client/` 后加载：
+
+```text
+lua_server_load zombie_crisis.lua
+lua_client_load zombie_crisis_hud.lua
+```
+
+模式包含普通感染者、Hunter、Smoker、Boomer、Charger、Spitter、Jockey、Witch、Tank，
+动态尸潮、特殊感染者计时、队友血量 HUD、终点判定和最终坚持阶段。不包含安全屋、
+语音、友军伤害或倒地救援。
+
+地图可以放置名为 `zombie_crisis_exit` 的 `info_target` 作为终点；没有实体时，
+服务器控制台可以设置坐标：
+
+```text
+zcrisis_set_end <x> <y> <z>
+```
+
+运行控制：`/zstart`、`/zstop`、`/zstatus`，或服务器控制台使用
+`zcrisis_start` 和 `zcrisis_stop`。`auto_start` 默认会在首批玩家进入后自动开始。
+
 ## 游戏状态
 
 ```lua
