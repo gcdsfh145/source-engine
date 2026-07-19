@@ -174,6 +174,8 @@ void CL_ClanIdChanged( IConVar *pConVar, const char *pOldString, float flOldValu
 
 ConVar	cl_resend	( "cl_resend","6", FCVAR_NONE, "Delay in seconds before the client will resend the 'connect' attempt", true, CL_MIN_RESEND_TIME, true, CL_MAX_RESEND_TIME );
 ConVar	cl_name		( "name","unnamed", FCVAR_ARCHIVE | FCVAR_USERINFO | FCVAR_PRINTABLEONLY | FCVAR_SERVER_CAN_EXECUTE, "Current user name", CL_NameCvarChanged );
+ConVar	cl_allow_different_versions( "cl_allow_different_versions", "1", FCVAR_ARCHIVE,
+	"Allow connecting to servers with a different steam.inf PatchVersion when the network protocol matches." );
 ConVar	password	( "password", "", FCVAR_ARCHIVE | FCVAR_SERVER_CANNOT_QUERY | FCVAR_DONTRECORD, "Current server access password" );
 ConVar  cl_interpolate( "cl_interpolate", "1.0", FCVAR_USERINFO | FCVAR_DEVELOPMENTONLY | FCVAR_NOT_CONNECTED, "Interpolate entities on the client." );
 ConVar  cl_clanid( "cl_clanid", "0", FCVAR_ARCHIVE | FCVAR_USERINFO | FCVAR_HIDDEN, "Current clan ID for name decoration", CL_ClanIdChanged );
@@ -526,7 +528,10 @@ void CBaseClientState::SendConnectPacket (int challengeNr, int authProtocol, uin
 	msg.WriteLong( m_retryChallenge );
 	msg.WriteString( GetClientName() );	// Name
 	msg.WriteString( password.GetString() );		// password
-	msg.WriteString( GetSteamInfIDVersionInfo().szVersionString );	// product version
+	// The legacy server-side handshake treats PatchVersion "2000" as the
+	// intentional no-check marker. Keep the real protocol number above so
+	// incompatible network message layouts are still rejected.
+	msg.WriteString( cl_allow_different_versions.GetBool() ? "2000" : GetSteamInfIDVersionInfo().szVersionString );	// product version
 //	msg.WriteByte( ( g_pServerPluginHandler->GetNumLoadedPlugins() > 0 ) ? 1 : 0 ); // have any client-side server plug-ins been loaded?
 
 	switch ( authProtocol )
@@ -1856,5 +1861,4 @@ bool CBaseClientState::IsClientConnectionViaMatchMaking( void )
 {
 	return ( V_strnistr( cl_connectmethod.GetString(), "quickplay", 9 ) || V_strnistr( cl_connectmethod.GetString(), "matchmaking", 11 ) );
 }
-
 
