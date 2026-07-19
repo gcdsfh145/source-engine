@@ -795,8 +795,9 @@ void CHudWeaponSelection::DrawLargeWeaponBox( C_BaseCombatWeapon *pWeapon, bool 
 					pWeapon->GetSpriteActive()->DrawSelf( xpos + x_offs, ypos + y_offs, col );
 				}
 				
-				// draw the inactive version
-				pWeapon->GetSpriteInactive()->DrawSelf( xpos + x_offs, ypos + y_offs, col );
+				// draw the inactive version when a weapon script supplied one
+				if ( pWeapon->GetSpriteInactive() )
+					pWeapon->GetSpriteInactive()->DrawSelf( xpos + x_offs, ypos + y_offs, col );
 			}
 		}
 		break;

@@ -23,8 +23,11 @@ struct LuaHudItem
 	int size;
 	Color color;
 	bool rect;
+	bool image;
 	bool visible;
 	vgui::HFont font;
+	int textureID;
+	char imageFile[256];
 };
 
 class CLuaHudElement : public CHudElement, public vgui::Panel
@@ -74,6 +77,14 @@ public:
 			LuaHudItem &item = m_items[i];
 			if ( !item.visible )
 				continue;
+			if ( item.image )
+			{
+				vgui::surface()->DrawSetColor( item.color );
+				vgui::surface()->DrawSetTexture( item.textureID );
+				vgui::surface()->DrawTexturedRect( item.x, item.y,
+					item.x + item.wide, item.y + item.tall );
+				continue;
+			}
 			if ( item.rect )
 			{
 				vgui::surface()->DrawSetColor( item.color );
@@ -126,6 +137,7 @@ public:
 		LuaHudItem *item = GetOrCreate( id );
 		if ( !item ) return;
 		item->rect = false;
+		item->image = false;
 		item->x = x; item->y = y; item->size = MAX( 1, MIN( size, 128 ) );
 		item->color = color;
 		Q_strncpy( item->text, text ? text : "", sizeof( item->text ) );
@@ -137,8 +149,23 @@ public:
 		LuaHudItem *item = GetOrCreate( id );
 		if ( !item ) return;
 		item->rect = true;
+		item->image = false;
 		item->x = x; item->y = y; item->wide = MAX( 0, wide ); item->tall = MAX( 0, tall );
 		item->color = color;
+	}
+
+	void CreateImage( const char *id, int x, int y, int wide, int tall,
+		const char *file, Color color )
+	{
+		LuaHudItem *item = GetOrCreate( id );
+		if ( !item || !file || !file[0] ) return;
+		item->rect = false;
+		item->image = true;
+		item->x = x; item->y = y; item->wide = MAX( 0, wide ); item->tall = MAX( 0, tall );
+		item->color = color;
+		Q_strncpy( item->imageFile, file, sizeof( item->imageFile ) );
+		item->textureID = vgui::surface()->CreateNewTextureID();
+		vgui::surface()->DrawSetTextureFile( item->textureID, item->imageFile, true, false );
 	}
 
 	void Remove( const char *id )
@@ -173,7 +200,14 @@ void LuaHudCreateRect( const char *id, int x, int y, int wide, int tall,
 	int r, int g, int b, int a )
 {
 	if ( CLuaHudElement *hud = CLuaHudElement::Instance() )
-		hud->CreateRect( id, x, y, wide, tall, LuaHudColor( r, g, b, a ) );
+		 hud->CreateRect( id, x, y, wide, tall, LuaHudColor( r, g, b, a ) );
+}
+
+void LuaHudCreateImage( const char *id, int x, int y, int wide, int tall,
+	const char *file, int r, int g, int b, int a )
+{
+	if ( CLuaHudElement *hud = CLuaHudElement::Instance() )
+		hud->CreateImage( id, x, y, wide, tall, file, LuaHudColor( r, g, b, a ) );
 }
 
 void LuaHudSetText( const char *id, const char *text )

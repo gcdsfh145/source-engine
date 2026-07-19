@@ -253,6 +253,21 @@ bool CLuaPluginManager::Init( IFileSystem *fileSystem, const char *pathID, const
 	luaopen_string( state );
 	luaopen_math( state );
 
+	luaL_newmetatable( state, "LuaVectorMeta" );
+	lua_pushcfunction( state, &CLuaPluginManager::LuaVectorAdd );
+	lua_setfield( state, -2, "__add" );
+	lua_pushcfunction( state, &CLuaPluginManager::LuaVectorSub );
+	lua_setfield( state, -2, "__sub" );
+	lua_pushcfunction( state, &CLuaPluginManager::LuaVectorMultiply );
+	lua_setfield( state, -2, "__mul" );
+	lua_pushcfunction( state, &CLuaPluginManager::LuaVectorDivide );
+	lua_setfield( state, -2, "__div" );
+	lua_pushcfunction( state, &CLuaPluginManager::LuaVectorUnm );
+	lua_setfield( state, -2, "__unm" );
+	lua_pushcfunction( state, &CLuaPluginManager::LuaVectorToString );
+	lua_setfield( state, -2, "__tostring" );
+	lua_pop( state, 1 );
+
 	lua_pushlightuserdata( state, this );
 	lua_setfield( state, LUA_REGISTRYINDEX, s_LuaManagerRegistryKey );
 	lua_sethook( state, LuaInstructionHook, LUA_MASKCOUNT, 1000 );
@@ -305,6 +320,7 @@ bool CLuaPluginManager::Init( IFileSystem *fileSystem, const char *pathID, const
 	{
 		{ "exists", &CLuaPluginManager::LuaFileExists },
 		{ "read",   &CLuaPluginManager::LuaFileRead },
+		{ "list",   &CLuaPluginManager::LuaFileList },
 		{ "write",  &CLuaPluginManager::LuaFileWrite },
 		{ NULL, NULL }
 	};
@@ -2227,6 +2243,49 @@ int CLuaPluginManager::LuaFileRead( lua_State *state )
 	return 1;
 }
 
+int CLuaPluginManager::LuaFileList( lua_State *state )
+{
+	CLuaPluginManager *manager = FromLuaState( state );
+	const char *directory = luaL_optstring( state, 1, "" );
+	if ( !manager || !manager->m_fileSystem || ( directory[0] && !LuaIsSafePath( directory ) ) )
+		return 0;
+
+	char wildcard[256];
+	if ( directory[0] )
+		Q_snprintf( wildcard, sizeof( wildcard ), "%s/*", directory );
+	else
+		Q_strncpy( wildcard, "*", sizeof( wildcard ) );
+
+	lua_newtable( state );
+	FileFindHandle_t handle = FILESYSTEM_INVALID_FIND_HANDLE;
+	const char *fileName = manager->m_fileSystem->FindFirstEx( wildcard, manager->m_pathID, &handle );
+	int resultIndex = 1;
+	while ( fileName && resultIndex <= 256 )
+	{
+		if ( fileName[0] != '.' )
+		{
+			bool isDirectory = manager->m_fileSystem->FindIsDirectory( handle );
+			lua_newtable( state );
+			lua_pushstring( state, fileName );
+			lua_setfield( state, -2, "name" );
+			lua_pushboolean( state, isDirectory ? 1 : 0 );
+			lua_setfield( state, -2, "directory" );
+			char path[256];
+			if ( directory[0] )
+				Q_snprintf( path, sizeof( path ), "%s/%s", directory, fileName );
+			else
+				Q_strncpy( path, fileName, sizeof( path ) );
+			lua_pushstring( state, path );
+			lua_setfield( state, -2, "path" );
+			lua_rawseti( state, -2, resultIndex++ );
+		}
+		fileName = manager->m_fileSystem->FindNext( handle );
+	}
+	if ( handle != FILESYSTEM_INVALID_FIND_HANDLE )
+		manager->m_fileSystem->FindClose( handle );
+	return 1;
+}
+
 int CLuaPluginManager::LuaFileWrite( lua_State *state )
 {
 	CLuaPluginManager *manager = FromLuaState( state );
@@ -2287,6 +2346,11 @@ static void LuaPushTriple( lua_State *state, const float value[3] )
 	lua_pushnumber( state, value[0] ); lua_setfield( state, -2, "x" );
 	lua_pushnumber( state, value[1] ); lua_setfield( state, -2, "y" );
 	lua_pushnumber( state, value[2] ); lua_setfield( state, -2, "z" );
+	luaL_getmetatable( state, "LuaVectorMeta" );
+	if ( lua_istable( state, -1 ) )
+		lua_setmetatable( state, -2 );
+	else
+		lua_pop( state, 1 );
 }
 
 int CLuaPluginManager::LuaVectorNew( lua_State *state )
@@ -2368,5 +2432,52 @@ int CLuaPluginManager::LuaVectorNormalize( lua_State *state )
 	if ( length > 0.0f )
 		for ( int i = 0; i < 3; ++i ) value[i] /= length;
 	LuaPushTriple( state, value );
+	return 1;
+}
+
+int CLuaPluginManager::LuaVectorMultiply( lua_State *state )
+{
+	float value[3];
+	float scale;
+	if ( LuaReadTriple( state, 1, value ) && lua_isnumber( state, 2 ) )
+		scale = (float)lua_tonumber( state, 2 );
+	else if ( lua_isnumber( state, 1 ) && LuaReadTriple( state, 2, value ) )
+		scale = (float)lua_tonumber( state, 1 );
+	else
+		return luaL_error( state, "vector multiplication expects a vector and a number" );
+	for ( int i = 0; i < 3; ++i ) value[i] *= scale;
+	LuaPushTriple( state, value );
+	return 1;
+}
+
+int CLuaPluginManager::LuaVectorDivide( lua_State *state )
+{
+	float value[3];
+	if ( !LuaReadTriple( state, 1, value ) )
+		return luaL_error( state, "vector division expects a vector" );
+	float scale = (float)luaL_checknumber( state, 2 );
+	if ( scale == 0.0f )
+		return luaL_error( state, "vector division by zero" );
+	for ( int i = 0; i < 3; ++i ) value[i] /= scale;
+	LuaPushTriple( state, value );
+	return 1;
+}
+
+int CLuaPluginManager::LuaVectorUnm( lua_State *state )
+{
+	float value[3];
+	if ( !LuaReadTriple( state, 1, value ) )
+		return luaL_error( state, "vector negation expects a vector" );
+	for ( int i = 0; i < 3; ++i ) value[i] = -value[i];
+	LuaPushTriple( state, value );
+	return 1;
+}
+
+int CLuaPluginManager::LuaVectorToString( lua_State *state )
+{
+	float value[3];
+	if ( !LuaReadTriple( state, 1, value ) )
+		return luaL_error( state, "vector tostring expects a vector" );
+	lua_pushfstring( state, "[%g %g %g]", value[0], value[1], value[2] );
 	return 1;
 }

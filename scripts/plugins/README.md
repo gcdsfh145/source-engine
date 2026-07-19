@@ -44,7 +44,11 @@ local text = plugin.file.read("scripts/plugins/data/example.txt")
 local a = plugin.vector.new(1, 2, 3)
 local b = plugin.vector.new(4, 5, 6)
 local c = plugin.vector.add(a, b)
+local d = a + Vector(8, 0, 0)
+local e = d * 0.5
 ```
+
+`Vector` 支持 `+`、`-`、`*`、`/` 和一元负号；实体返回的位置向量也支持这些运算。
 
 Lua 文件写入被限制在 `scripts/plugins/data/`，不允许绝对路径、反斜杠或 `..`。
 
@@ -78,6 +82,61 @@ if p then
     local view = p:eye_angles()
 end
 ```
+
+### Mod 实体外观、物理和 KeyValue
+
+动画实体支持模型缩放、皮肤、bodygroup 和动画播放速度；普通实体支持重力和
+摩擦力。`SetModelScale` 的第二个参数是渐变秒数，缩放范围为 `0` 到 `100`。
+
+```lua
+local ent = ents.Create("prop_physics", {
+    model = "models/props_junk/wood_crate001a.mdl",
+    spawnflags = 256
+})
+if ent then
+    ent:SetModelScale(1.25, 0.25)
+    ent:SetSkin(1)
+    ent:SetBodygroup(0, 0)
+    ent:SetGravity(0.65)
+    ent:SetFriction(0.2)
+    ent:SetKeyValue("rendercolor", "80 180 255")
+    plugin.log(ent:GetModelScale(), ent:GetSkin(), ent:GetGravity())
+end
+```
+
+`ents.Create` 的第二个参数可以是出生位置向量，也可以是可选 KeyValue 表；KeyValue
+表会在实体生成前应用，表值支持字符串、
+数字和布尔值。`GetKeyValue` 读取引擎能提供的 KeyValue，未知字段返回 `nil`。
+`SetKeyValue`、`SetModel` 和实体创建属于服务端操作。
+
+动画模型还可以通过挂点制作炮口、特效和装备位置：
+
+```lua
+local attachment = ent:LookupAttachment("muzzle")
+local muzzlePos, muzzleAngles = ent:GetAttachment(attachment)
+if muzzlePos then
+    plugin.log(muzzlePos.x, muzzleAngles.y)
+end
+
+local color = ent:GetColor()
+ent:SetColor(color.r, color.g, color.b, 180)
+plugin.log(ent:GetNumBodyGroups(), ent:GetElasticity(), ent:GetRenderMode())
+```
+
+服务端可以在地图/插件初始化时预加载模型和声音。清单需要声明
+`resource.precache` 权限：
+
+```lua
+plugin.Manifest({
+    version = "1.0.0",
+    permissions = { "entity.create", "entity.remove", "resource.precache" }
+})
+
+util.PrecacheModel("models/props_junk/wood_crate001a.mdl")
+util.PrecacheSound("buttons/button14.wav")
+```
+
+完整可运行的 Mod 小样例见 `scripts/plugins/server/mod_showcase.lua`。
 
 服务端可以让一个在地面的玩家跳跃。第二个参数为 `true` 时允许空中跳跃，
 脚本可以用它实现二段跳；插件需要自己记录每次起跳次数，避免每帧无限跳跃：
@@ -338,6 +397,48 @@ plugin.hud.show_fps(true) -- client only
 plugin.hud.message("Lua message")
 ```
 
+## 地图预览和游戏文件浏览
+
+客户端 Lua 可以读取 MOD 搜索路径中的文件名和文本内容，但路径必须是相对路径，
+不能使用绝对路径、反斜杠或 `..`。目录枚举最多返回 256 项，适合制作 Mod 浏览器、
+配置查看器和资源检查工具。
+
+地图 API 会扫描 `maps/*.bsp`，并自动寻找以下预览图之一：
+`maps/<map>.jpg`、`maps/<map>.png`、`materials/maps/<map>/preview.jpg` 或
+`materials/maps/<map>/preview.png`。
+
+```lua
+local current = plugin.map.current()
+plugin.log(current.name, current.file, current.preview or "no preview")
+
+for _, map in ipairs(plugin.map.list()) do
+    plugin.log(map.name, map.preview or "no preview")
+end
+
+for _, item in ipairs(plugin.file.list("scripts/plugins")) do
+    plugin.log(item.directory and "directory" or "file", item.path)
+end
+
+local text = plugin.file.read("scripts/plugins/README.md")
+if text then
+    plugin.log(string.sub(text, 1, 200))
+end
+```
+
+客户端还支持将地图预览图显示到 HUD：
+
+```lua
+local map = plugin.map.current()
+if map.preview then
+    plugin.hud.create_image("map_preview", 32, 32, 320, 180, map.preview,
+        {r=255, g=255, b=255, a=255})
+end
+```
+
+示例插件：`scripts/plugins/client/map_file_browser.lua`。加载后可执行
+`lua_map_browser`，或者使用 `lua_map_preview <map>` 与
+`lua_file_view <relative path>`。
+
 服务端向客户端发送自定义消息：
 
 ```lua
@@ -469,3 +570,16 @@ end)
 插件。Lua 默认关闭 `io`、`os`、`debug`、`package`，文件写入只能进入
 `scripts/plugins/data/`。每帧回调预算由 `lua_max_callbacks_per_frame` 控制，单次
 回调指令预算由 `lua_max_instructions_per_callback` 控制，设置为 `0` 可关闭对应限制。
+
+## 可直接复制的插件
+
+`scripts/plugins/examples/` 中提供了几个不会自动加载的示例：
+
+- `server_welcome.lua`：欢迎消息、聊天命令
+- `server_healing_zone.lua`：治疗区域
+- `server_laser_weapon.lua`：自定义激光武器
+- `server_guard_npc.lua`：Lua 控制的 NPC 守卫
+- `client_status_hud.lua`：地图名和 FPS HUD
+
+确认脚本后，将服务端插件复制到 `scripts/plugins/server/`，客户端插件复制到
+`scripts/plugins/client/`，重启或执行插件热重载即可。

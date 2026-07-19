@@ -28,7 +28,10 @@
 //=========================================================
 bool CSingleplayRules::IsMultiplayer( void )
 {
-	return false;
+	// Keep normal single-player launches unchanged.  A generic HL2 listen
+	// server can opt into the same rules without loading the HL2MP game DLL by
+	// starting with more than one server slot.
+	return gpGlobals && gpGlobals->maxClients > 1;
 }
 
 // Needed during the conversion, but once DMG_* types have been fixed, this isn't used anymore.
@@ -497,4 +500,3 @@ bool CSingleplayRules::Damage_ShouldNotBleed( int iDmgType )
 	}
 
 #endif
-

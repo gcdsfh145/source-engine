@@ -300,6 +300,11 @@ void CBaseCombatWeapon::Precache( void )
 	{
 		// Couldn't read data file, remove myself
 		Warning( "Error reading weapon data file for: %s\n", GetClassname() );
+		// Keep weapons usable when a MOD does not ship a matching
+		// scripts/<weapon>.txt. The client loads generic HUD icons below.
+#if defined( CLIENT_DLL )
+		gWR.LoadWeaponSprites( m_hWeaponFileInfo );
+#endif
 	//	Remove( );	//don't remove, this gets released soon!
 	}
 }
@@ -460,7 +465,16 @@ int CBaseCombatWeapon::GetPosition( void ) const
 //-----------------------------------------------------------------------------
 const char *CBaseCombatWeapon::GetName( void ) const
 {
-	return GetWpnData().szClassName;
+	// A missing weapon script leaves the cached FileWeaponInfo_t unparsed.
+	// In that case szClassName is empty, but the entity still has a valid
+	// network/server classname.  Returning an empty name makes the client
+	// send an empty weapon selection command, so the server cannot switch to
+	// the weapon.
+	const char *pszName = GetWpnData().szClassName;
+	if ( pszName && pszName[0] )
+		return pszName;
+
+	return const_cast< CBaseCombatWeapon * >( this )->GetClassname();
 }
 
 //-----------------------------------------------------------------------------

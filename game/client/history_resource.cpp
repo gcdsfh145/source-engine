@@ -408,7 +408,7 @@ void CHudHistoryResource::Paint( void )
 				break;
 			}
 
-			if ( !itemIcon )
+			if ( !itemIcon || itemIcon->Width() <= 0 || itemIcon->Height() <= 0 )
 				continue;
 
 			if ( clr[3] )
@@ -461,5 +461,4 @@ void CHudHistoryResource::Paint( void )
 		}
 	}
 }
-
 

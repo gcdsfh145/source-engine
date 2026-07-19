@@ -529,6 +529,29 @@ static bool LuaReadVector( lua_State *state, int stackIndex, Vector &value )
 	return true;
 }
 
+static bool LuaLooksLikeVector( lua_State *state, int stackIndex )
+{
+	if ( !lua_istable( state, stackIndex ) )
+		return false;
+	lua_rawgeti( state, stackIndex, 1 );
+	bool numeric = lua_isnumber( state, -1 );
+	lua_pop( state, 1 );
+	if ( numeric ) return true;
+	lua_getfield( state, stackIndex, "x" );
+	numeric = lua_isnumber( state, -1 );
+	lua_pop( state, 1 );
+	return numeric;
+}
+
+static void LuaSetVectorMetatable( lua_State *state )
+{
+	luaL_getmetatable( state, "LuaVectorMeta" );
+	if ( lua_istable( state, -1 ) )
+		lua_setmetatable( state, -2 );
+	else
+		lua_pop( state, 1 );
+}
+
 static void LuaPushVector( lua_State *state, const Vector &value )
 {
 	lua_createtable( state, 3, 3 );
@@ -538,6 +561,7 @@ static void LuaPushVector( lua_State *state, const Vector &value )
 	lua_pushnumber( state, value.x ); lua_setfield( state, -2, "x" );
 	lua_pushnumber( state, value.y ); lua_setfield( state, -2, "y" );
 	lua_pushnumber( state, value.z ); lua_setfield( state, -2, "z" );
+	LuaSetVectorMetatable( state );
 }
 
 static void LuaPushTriple( lua_State *state, const float value[3] )
@@ -551,6 +575,7 @@ static void LuaPushTriple( lua_State *state, const float value[3] )
 	lua_pushnumber( state, value[0] ); lua_setfield( state, -2, "x" );
 	lua_pushnumber( state, value[1] ); lua_setfield( state, -2, "y" );
 	lua_pushnumber( state, value[2] ); lua_setfield( state, -2, "z" );
+	LuaSetVectorMetatable( state );
 }
 
 static int LuaEntityGet( lua_State *state )
@@ -588,6 +613,9 @@ static int LuaEntityCreate( lua_State *state )
 		return luaL_error( state, "plugin permission denied: entity.create" );
 	const char *classname = luaL_checkstring( state, 1 );
 	const char *actualClassname = classname;
+	Vector spawnOrigin;
+	bool hasSpawnOrigin = LuaLooksLikeVector( state, 2 ) && LuaReadVector( state, 2, spawnOrigin );
+	int keyValueIndex = hasSpawnOrigin ? 3 : 2;
 	bool customWeapon = s_LuaServerManager &&
 		s_LuaServerManager->HasCustomDefinition( "weapon", classname );
 	bool customNPC = s_LuaServerManager &&
@@ -611,6 +639,39 @@ static int LuaEntityCreate( lua_State *state )
 			static_cast< CLuaNPCEntity * >( entity )->SetLuaDefinition( classname );
 		entity->SetName( AllocPooledString( classname ) );
 	}
+	if ( entity && lua_istable( state, keyValueIndex ) )
+	{
+		lua_pushnil( state );
+		while ( lua_next( state, keyValueIndex ) != 0 )
+		{
+			if ( lua_isstring( state, -2 ) )
+			{
+				const char *key = lua_tostring( state, -2 );
+				char value[256];
+				bool validValue = false;
+				if ( lua_isstring( state, -1 ) )
+				{
+					Q_strncpy( value, lua_tostring( state, -1 ), sizeof( value ) );
+					validValue = true;
+				}
+				else if ( lua_isnumber( state, -1 ) )
+				{
+					Q_snprintf( value, sizeof( value ), "%g", lua_tonumber( state, -1 ) );
+					validValue = true;
+				}
+				else if ( lua_isboolean( state, -1 ) )
+				{
+					Q_strncpy( value, lua_toboolean( state, -1 ) ? "1" : "0", sizeof( value ) );
+					validValue = true;
+				}
+				if ( validValue )
+					entity->KeyValue( key, value );
+			}
+			lua_pop( state, 1 );
+		}
+	}
+	if ( entity && hasSpawnOrigin )
+		entity->SetAbsOrigin( spawnOrigin );
 	if ( !entity || DispatchSpawn( entity ) < 0 )
 	{
 		if ( entity )
@@ -726,6 +787,161 @@ static int LuaEntitySetModel( lua_State *state )
 	lua_pushboolean( state, 1 );
 	return 1;
 #endif
+}
+
+static int LuaEntityGetModelScale( lua_State *state )
+{
+	CBaseAnimating *entity = dynamic_cast< CBaseAnimating * >( LuaEntityPointer( state, 1 ) );
+	if ( !entity ) return 0;
+	lua_pushnumber( state, entity->GetModelScale() );
+	return 1;
+}
+
+static int LuaEntitySetModelScale( lua_State *state )
+{
+	CBaseAnimating *entity = dynamic_cast< CBaseAnimating * >( LuaEntityPointer( state, 1 ) );
+	float scale = (float)luaL_checknumber( state, 2 );
+	float duration = (float)luaL_optnumber( state, 3, 0.0 );
+	if ( !entity )
+	{
+		lua_pushboolean( state, 0 );
+		return 1;
+	}
+	if ( scale <= 0.0f || scale > 100.0f || duration < 0.0f )
+		return luaL_error( state, "entity:SetModelScale expects scale in (0, 100] and a non-negative duration" );
+	entity->SetModelScale( scale, duration );
+	lua_pushboolean( state, 1 );
+	return 1;
+}
+
+static int LuaEntityGetSkin( lua_State *state )
+{
+	CBaseAnimating *entity = dynamic_cast< CBaseAnimating * >( LuaEntityPointer( state, 1 ) );
+	if ( !entity ) return 0;
+	lua_pushinteger( state, entity->m_nSkin );
+	return 1;
+}
+
+static int LuaEntitySetSkin( lua_State *state )
+{
+	CBaseAnimating *entity = dynamic_cast< CBaseAnimating * >( LuaEntityPointer( state, 1 ) );
+	int skin = (int)luaL_checkinteger( state, 2 );
+	if ( !entity )
+	{
+		lua_pushboolean( state, 0 );
+		return 1;
+	}
+	if ( skin < 0 )
+		return luaL_error( state, "entity:SetSkin expects a non-negative skin index" );
+	entity->m_nSkin = skin;
+	lua_pushboolean( state, 1 );
+	return 1;
+}
+
+static int LuaEntityGetBodygroup( lua_State *state )
+{
+	CBaseAnimating *entity = dynamic_cast< CBaseAnimating * >( LuaEntityPointer( state, 1 ) );
+	int group = (int)luaL_checkinteger( state, 2 );
+	if ( !entity || group < 0 || group >= entity->GetNumBodyGroups() ) return 0;
+	lua_pushinteger( state, entity->GetBodygroup( group ) );
+	return 1;
+}
+
+static int LuaEntitySetBodygroup( lua_State *state )
+{
+	CBaseAnimating *entity = dynamic_cast< CBaseAnimating * >( LuaEntityPointer( state, 1 ) );
+	int group = (int)luaL_checkinteger( state, 2 );
+	int value = (int)luaL_checkinteger( state, 3 );
+	if ( !entity || group < 0 || group >= entity->GetNumBodyGroups() || value < 0 )
+	{
+		lua_pushboolean( state, 0 );
+		return 1;
+	}
+	entity->SetBodygroup( group, value );
+	lua_pushboolean( state, 1 );
+	return 1;
+}
+
+static int LuaEntityGetGravity( lua_State *state )
+{
+	CBaseEntity *entity = LuaEntityPointer( state, 1 );
+	if ( !entity ) return 0;
+	lua_pushnumber( state, entity->GetGravity() );
+	return 1;
+}
+
+static int LuaEntitySetGravity( lua_State *state )
+{
+	CBaseEntity *entity = LuaEntityPointer( state, 1 );
+	float gravity = (float)luaL_checknumber( state, 2 );
+	if ( !entity )
+	{
+		lua_pushboolean( state, 0 );
+		return 1;
+	}
+	entity->SetGravity( gravity );
+	lua_pushboolean( state, 1 );
+	return 1;
+}
+
+static int LuaEntityGetFriction( lua_State *state )
+{
+#ifdef CLIENT_DLL
+	(void)state;
+	return luaL_error( state, "entity:GetFriction is server-only" );
+#else
+	CBaseEntity *entity = LuaEntityPointer( state, 1 );
+	if ( !entity ) return 0;
+	lua_pushnumber( state, entity->GetFriction() );
+	return 1;
+#endif
+}
+
+static int LuaEntitySetFriction( lua_State *state )
+{
+	CBaseEntity *entity = LuaEntityPointer( state, 1 );
+	float friction = (float)luaL_checknumber( state, 2 );
+	if ( !entity )
+	{
+		lua_pushboolean( state, 0 );
+		return 1;
+	}
+	entity->SetFriction( friction );
+	lua_pushboolean( state, 1 );
+	return 1;
+}
+
+static int LuaEntitySetKeyValue( lua_State *state )
+{
+#ifdef CLIENT_DLL
+	(void)state;
+	return luaL_error( state, "entity:SetKeyValue is server-only" );
+#else
+	CBaseEntity *entity = LuaEntityPointer( state, 1 );
+	const char *key = luaL_checkstring( state, 2 );
+	const char *value = luaL_checkstring( state, 3 );
+	if ( !entity )
+	{
+		lua_pushboolean( state, 0 );
+		return 1;
+	}
+	lua_pushboolean( state, entity->KeyValue( key, value ) ? 1 : 0 );
+	return 1;
+#endif
+}
+
+static int LuaEntityGetKeyValue( lua_State *state )
+{
+	CBaseEntity *entity = LuaEntityPointer( state, 1 );
+	const char *key = luaL_checkstring( state, 2 );
+	char value[256];
+	if ( !entity || !entity->GetKeyValue( key, value, sizeof( value ) ) )
+	{
+		lua_pushnil( state );
+		return 1;
+	}
+	lua_pushstring( state, value );
+	return 1;
 }
 
 static int LuaEntityFireInput( lua_State *state )
@@ -889,6 +1105,74 @@ static int LuaUtilTraceLine( lua_State *state )
 	else
 		lua_pushnil( state );
 	lua_setfield( state, -2, "Entity" );
+	return 1;
+}
+
+static int LuaUtilTraceHull( lua_State *state )
+{
+	Vector start;
+	Vector end;
+	Vector mins;
+	Vector maxs;
+	if ( !LuaReadVector( state, 1, start ) || !LuaReadVector( state, 2, end ) ||
+		!LuaReadVector( state, 3, mins ) || !LuaReadVector( state, 4, maxs ) )
+		return luaL_error( state, "util.TraceHull expects start, end, mins and maxs vectors" );
+
+	CBaseEntity *ignore = NULL;
+	if ( lua_isuserdata( state, 5 ) )
+		ignore = LuaEntityPointer( state, 5 );
+
+	trace_t trace;
+	UTIL_TraceHull( start, end, mins, maxs, MASK_SHOT_HULL, ignore,
+		COLLISION_GROUP_NONE, &trace );
+	lua_newtable( state );
+	lua_pushboolean( state, trace.DidHit() ? 1 : 0 );
+	lua_setfield( state, -2, "Hit" );
+	lua_pushnumber( state, trace.fraction );
+	lua_setfield( state, -2, "Fraction" );
+	lua_pushboolean( state, trace.startsolid ? 1 : 0 );
+	lua_setfield( state, -2, "StartSolid" );
+	lua_pushboolean( state, trace.allsolid ? 1 : 0 );
+	lua_setfield( state, -2, "AllSolid" );
+	LuaPushVector( state, trace.endpos );
+	lua_setfield( state, -2, "HitPos" );
+	LuaPushVector( state, trace.plane.normal );
+	lua_setfield( state, -2, "HitNormal" );
+	lua_pushinteger( state, trace.hitgroup );
+	lua_setfield( state, -2, "HitGroup" );
+	if ( trace.m_pEnt )
+		LuaPushEntity( state, trace.m_pEnt->entindex() );
+	else
+		lua_pushnil( state );
+	lua_setfield( state, -2, "Entity" );
+	return 1;
+}
+
+static int LuaUtilPrecacheModel( lua_State *state )
+{
+	if ( s_LuaServerManager && !s_LuaServerManager->HasPermission( "resource.precache" ) )
+		return luaL_error( state, "plugin permission denied: resource.precache" );
+	const char *model = luaL_checkstring( state, 1 );
+	if ( !model[0] )
+	{
+		lua_pushboolean( state, 0 );
+		return 1;
+	}
+	lua_pushinteger( state, CBaseEntity::PrecacheModel( model, true ) );
+	return 1;
+}
+
+static int LuaUtilPrecacheSound( lua_State *state )
+{
+	if ( s_LuaServerManager && !s_LuaServerManager->HasPermission( "resource.precache" ) )
+		return luaL_error( state, "plugin permission denied: resource.precache" );
+	const char *sound = luaL_checkstring( state, 1 );
+	if ( !sound[0] )
+	{
+		lua_pushboolean( state, 0 );
+		return 1;
+	}
+	lua_pushboolean( state, CBaseEntity::PrecacheSound( sound ) ? 1 : 0 );
 	return 1;
 }
 
@@ -1091,7 +1375,7 @@ static int LuaPlayerGive( lua_State *state )
 			item->AddSpawnFlags( SF_NORESPAWN );
 			DispatchSpawn( item );
 			if ( !item->IsMarkedForDeletion() )
-				item->Touch( player );
+				player->Weapon_Equip( static_cast< CBaseCombatWeapon * >( item ) );
 		}
 	}
 	else
@@ -1285,6 +1569,19 @@ static int LuaEntitySetColor( lua_State *state )
 	return 1;
 }
 
+static int LuaEntityGetColor( lua_State *state )
+{
+	CBaseEntity *entity = LuaEntityPointer( state, 1 );
+	if ( !entity ) return 0;
+	color32 color = entity->GetRenderColor();
+	lua_newtable( state );
+	lua_pushinteger( state, color.r ); lua_setfield( state, -2, "r" );
+	lua_pushinteger( state, color.g ); lua_setfield( state, -2, "g" );
+	lua_pushinteger( state, color.b ); lua_setfield( state, -2, "b" );
+	lua_pushinteger( state, color.a ); lua_setfield( state, -2, "a" );
+	return 1;
+}
+
 static int LuaEntitySetRenderMode( lua_State *state )
 {
 	CBaseEntity *entity = LuaEntityPointer( state, 1 );
@@ -1297,6 +1594,75 @@ static int LuaEntitySetRenderMode( lua_State *state )
 	entity->SetRenderMode( (RenderMode_t)mode );
 	lua_pushboolean( state, 1 );
 	return 1;
+}
+
+static int LuaEntityGetRenderMode( lua_State *state )
+{
+	CBaseEntity *entity = LuaEntityPointer( state, 1 );
+	if ( !entity ) return 0;
+	lua_pushinteger( state, entity->GetRenderMode() );
+	return 1;
+}
+
+static int LuaEntityGetElasticity( lua_State *state )
+{
+	CBaseEntity *entity = LuaEntityPointer( state, 1 );
+	if ( !entity ) return 0;
+	lua_pushnumber( state, entity->GetElasticity() );
+	return 1;
+}
+
+static int LuaEntitySetElasticity( lua_State *state )
+{
+#ifdef CLIENT_DLL
+	(void)state;
+	return luaL_error( state, "entity:SetElasticity is server-only" );
+#else
+	CBaseEntity *entity = LuaEntityPointer( state, 1 );
+	float elasticity = (float)luaL_checknumber( state, 2 );
+	if ( !entity )
+	{
+		lua_pushboolean( state, 0 );
+		return 1;
+	}
+	entity->SetElasticity( elasticity );
+	lua_pushboolean( state, 1 );
+	return 1;
+#endif
+}
+
+static int LuaEntityGetNumBodyGroups( lua_State *state )
+{
+	CBaseAnimating *entity = dynamic_cast< CBaseAnimating * >( LuaEntityPointer( state, 1 ) );
+	if ( !entity ) return 0;
+	lua_pushinteger( state, entity->GetNumBodyGroups() );
+	return 1;
+}
+
+static int LuaEntityLookupAttachment( lua_State *state )
+{
+	CBaseAnimating *entity = dynamic_cast< CBaseAnimating * >( LuaEntityPointer( state, 1 ) );
+	const char *name = luaL_checkstring( state, 2 );
+	if ( !entity ) return 0;
+	lua_pushinteger( state, entity->LookupAttachment( name ) );
+	return 1;
+}
+
+static int LuaEntityGetAttachment( lua_State *state )
+{
+	CBaseAnimating *entity = dynamic_cast< CBaseAnimating * >( LuaEntityPointer( state, 1 ) );
+	int attachment = (int)luaL_checkinteger( state, 2 );
+	Vector origin;
+	QAngle angles;
+	if ( !entity || attachment <= 0 || !entity->GetAttachment( attachment, origin, angles ) )
+	{
+		lua_pushnil( state );
+		return 1;
+	}
+	LuaPushVector( state, origin );
+	Vector angleVector( angles.x, angles.y, angles.z );
+	LuaPushVector( state, angleVector );
+	return 2;
 }
 
 static int LuaEntityGetSequence( lua_State *state )
@@ -1444,6 +1810,14 @@ static int LuaPlayerGetEyeAngles( lua_State *state )
 	const QAngle &angles = player->EyeAngles();
 	float value[3] = { angles.x, angles.y, angles.z };
 	LuaPushTriple( state, value );
+	return 1;
+}
+
+static int LuaPlayerGetEyePos( lua_State *state )
+{
+	CBasePlayer *player = ToBasePlayer( LuaEntityPointer( state, 1 ) );
+	if ( !player ) return 0;
+	LuaPushVector( state, player->EyePosition() );
 	return 1;
 }
 
@@ -1665,6 +2039,82 @@ static int LuaPlayerGetShootPos( lua_State *state )
 }
 #endif
 
+static void LuaMapPushInfo( lua_State *state, const char *mapName )
+{
+	char bspPath[160];
+	Q_snprintf( bspPath, sizeof( bspPath ), "maps/%s.bsp", mapName ? mapName : "" );
+	lua_newtable( state );
+	lua_pushstring( state, mapName ? mapName : "" );
+	lua_setfield( state, -2, "name" );
+	lua_pushstring( state, bspPath );
+	lua_setfield( state, -2, "file" );
+
+	const char *preview = NULL;
+	char previewPath[192];
+	const char *candidates[] =
+	{
+		"maps/%s.jpg",
+		"maps/%s.png",
+		"materials/maps/%s/preview.jpg",
+		"materials/maps/%s/preview.png"
+	};
+	for ( int i = 0; i < ARRAYSIZE( candidates ); ++i )
+	{
+		Q_snprintf( previewPath, sizeof( previewPath ), candidates[i], mapName ? mapName : "" );
+		if ( g_pFullFileSystem && g_pFullFileSystem->FileExists( previewPath, "MOD" ) )
+		{
+			preview = previewPath;
+			break;
+		}
+	}
+	if ( preview )
+		lua_pushstring( state, preview );
+	else
+		lua_pushnil( state );
+	lua_setfield( state, -2, "preview" );
+}
+
+static int LuaMapCurrent( lua_State *state )
+{
+	const char *levelName = "";
+#ifdef CLIENT_DLL
+	if ( engine )
+		levelName = engine->GetLevelName();
+#else
+	if ( gpGlobals )
+		levelName = STRING( gpGlobals->mapname );
+#endif
+	char mapName[128];
+	Q_FileBase( levelName ? levelName : "", mapName, sizeof( mapName ) );
+	LuaMapPushInfo( state, mapName );
+	return 1;
+}
+
+static int LuaMapList( lua_State *state )
+{
+	lua_newtable( state );
+	if ( !g_pFullFileSystem )
+		return 1;
+
+	FileFindHandle_t handle = FILESYSTEM_INVALID_FIND_HANDLE;
+	const char *fileName = g_pFullFileSystem->FindFirstEx( "maps/*.bsp", "MOD", &handle );
+	int resultIndex = 1;
+	while ( fileName && resultIndex <= 256 )
+	{
+		if ( !g_pFullFileSystem->FindIsDirectory( handle ) )
+		{
+			char mapName[128];
+			Q_FileBase( fileName, mapName, sizeof( mapName ) );
+			LuaMapPushInfo( state, mapName );
+			lua_rawseti( state, -2, resultIndex++ );
+		}
+		fileName = g_pFullFileSystem->FindNext( handle );
+	}
+	if ( handle != FILESYSTEM_INVALID_FIND_HANDLE )
+		g_pFullFileSystem->FindClose( handle );
+	return 1;
+}
+
 static int LuaEntityAll( lua_State *state )
 {
 	lua_newtable( state );
@@ -1700,6 +2150,24 @@ static int LuaEntityFindInSphere( lua_State *state )
 	}
 	return 1;
 }
+
+#ifndef CLIENT_DLL
+static int LuaEntityFindByName( lua_State *state )
+{
+	const char *targetName = luaL_checkstring( state, 1 );
+	lua_newtable( state );
+	int resultIndex = 1;
+	for ( int index = 0; index < MAX_EDICTS; ++index )
+	{
+		CBaseEntity *entity = CBaseEntity::Instance( index );
+		if ( !entity || Q_stricmp( STRING( entity->GetEntityName() ), targetName ) )
+			continue;
+		LuaPushEntity( state, index );
+		lua_rawseti( state, -2, resultIndex++ );
+	}
+	return 1;
+}
+#endif
 
 static int LuaPlayerGetByID( lua_State *state )
 {
@@ -1804,6 +2272,25 @@ static int LuaHudCreateRect( lua_State *state )
 #else
 	(void)state;
 	return luaL_error( state, "hud.create_rect is client-only" );
+#endif
+}
+
+static int LuaHudCreateImage( lua_State *state )
+{
+#ifdef CLIENT_DLL
+	const char *id = luaL_checkstring( state, 1 );
+	int x = (int)luaL_checkinteger( state, 2 );
+	int y = (int)luaL_checkinteger( state, 3 );
+	int wide = (int)luaL_checkinteger( state, 4 );
+	int tall = (int)luaL_checkinteger( state, 5 );
+	const char *file = luaL_checkstring( state, 6 );
+	int r, g, b, a;
+	LuaHudReadColor( state, 7, r, g, b, a );
+	LuaHudCreateImage( id, x, y, wide, tall, file, r, g, b, a );
+	return 0;
+#else
+	(void)state;
+	return luaL_error( state, "hud.create_image is client-only" );
 #endif
 }
 
@@ -2158,11 +2645,18 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "SetParent",    &LuaEntitySetParent },
 		{ "EmitSound",    &LuaEntityEmitSound },
 		{ "SetColor",     &LuaEntitySetColor },
+		{ "GetColor",     &LuaEntityGetColor },
 		{ "SetRenderMode", &LuaEntitySetRenderMode },
+		{ "GetRenderMode", &LuaEntityGetRenderMode },
+		{ "GetElasticity", &LuaEntityGetElasticity },
+		{ "SetElasticity", &LuaEntitySetElasticity },
 		{ "GetSequence",  &LuaEntityGetSequence },
 		{ "SetSequence",  &LuaEntitySetSequence },
 		{ "LookupSequence", &LuaEntityLookupSequence },
 		{ "SetPlaybackRate", &LuaEntitySetPlaybackRate },
+		{ "GetNumBodyGroups", &LuaEntityGetNumBodyGroups },
+		{ "LookupAttachment", &LuaEntityLookupAttachment },
+		{ "GetAttachment", &LuaEntityGetAttachment },
 		{ "health",       &LuaEntityGetHealth },
 		{ "set_health",   &LuaEntitySetHealth },
 		{ "team",         &LuaEntityGetTeam },
@@ -2170,6 +2664,18 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "SetName",      &LuaEntitySetTargetName },
 		{ "GetModel",     &LuaEntityGetModel },
 		{ "SetModel",     &LuaEntitySetModel },
+		{ "GetModelScale", &LuaEntityGetModelScale },
+		{ "SetModelScale", &LuaEntitySetModelScale },
+		{ "GetSkin",      &LuaEntityGetSkin },
+		{ "SetSkin",      &LuaEntitySetSkin },
+		{ "GetBodygroup", &LuaEntityGetBodygroup },
+		{ "SetBodygroup", &LuaEntitySetBodygroup },
+		{ "GetGravity",   &LuaEntityGetGravity },
+		{ "SetGravity",   &LuaEntitySetGravity },
+		{ "GetFriction",  &LuaEntityGetFriction },
+		{ "SetFriction",  &LuaEntitySetFriction },
+		{ "GetKeyValue",  &LuaEntityGetKeyValue },
+		{ "SetKeyValue",  &LuaEntitySetKeyValue },
 		{ "Fire",         &LuaEntityFireInput },
 		{ "TakeDamage",   &LuaEntityTakeDamage },
 		{ "Remove",       &LuaEntityRemove },
@@ -2182,6 +2688,7 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "grounded",     &LuaPlayerIsGrounded },
 		{ "water_level",  &LuaPlayerGetWaterLevel },
 		{ "eye_angles",   &LuaPlayerGetEyeAngles },
+		{ "eye_pos",      &LuaPlayerGetEyePos },
 		{ "jump",         &LuaPlayerJump },
 		{ "GetPos",       &LuaEntityGetOrigin },
 		{ "SetPos",       &LuaEntitySetOrigin },
@@ -2197,6 +2704,7 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "IsOnGround",   &LuaPlayerIsGrounded },
 		{ "WaterLevel",   &LuaPlayerGetWaterLevel },
 		{ "EyeAngles",    &LuaPlayerGetEyeAngles },
+		{ "EyePos",       &LuaPlayerGetEyePos },
 		{ "Jump",         &LuaPlayerJump },
 		{ "Spawn",        &LuaPlayerSpawn },
 		{ "Kill",         &LuaPlayerKill },
@@ -2252,6 +2760,9 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "Remove", &LuaEntityRemove },
 		{ "GetAll", &LuaEntityAll },
 		{ "FindInSphere", &LuaEntityFindInSphere },
+#ifndef CLIENT_DLL
+		{ "FindByName", &LuaEntityFindByName },
+#endif
 		{ NULL, NULL }
 	};
 	static const luaL_Reg playerFunctions[] =
@@ -2276,6 +2787,9 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "Remove", &LuaEntityRemove },
 		{ "GetAll", &LuaEntityAll },
 		{ "FindInSphere", &LuaEntityFindInSphere },
+#ifndef CLIENT_DLL
+		{ "FindByName", &LuaEntityFindByName },
+#endif
 		{ NULL, NULL }
 	};
 	lua_newtable( state );
@@ -2312,17 +2826,31 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "frame_time",  &LuaGameFrameTime },
 		{ "tick",        &LuaGameTick },
 		{ "max_clients", &LuaGameMaxClients },
+		{ "GetMap",      &LuaGameMap },
+		{ "GetTime",     &LuaGameTime },
+		{ "GetFrameTime", &LuaGameFrameTime },
+		{ "GetTick",     &LuaGameTick },
 		{ NULL, NULL }
 	};
 	lua_newtable( state );
 	luaL_register( state, NULL, gameFunctions );
 	lua_setfield( state, -2, "game" );
+	static const luaL_Reg mapFunctions[] =
+	{
+		{ "current", &LuaMapCurrent },
+		{ "list",    &LuaMapList },
+		{ NULL, NULL }
+	};
+	lua_newtable( state );
+	luaL_register( state, NULL, mapFunctions );
+	lua_setfield( state, -2, "map" );
 	static const luaL_Reg hudFunctions[] =
 	{
 		{ "message",      &LuaHudMessage },
 		{ "show_fps",     &LuaHudShowFps },
 		{ "create_text",  &LuaHudCreateText },
 		{ "create_rect",  &LuaHudCreateRect },
+		{ "create_image", &LuaHudCreateImage },
 		{ "set_text",     &LuaHudSetText },
 		{ "set_pos",      &LuaHudSetPosition },
 		{ "set_color",    &LuaHudSetColor },
@@ -2367,6 +2895,9 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 	static const luaL_Reg utilFunctions[] =
 	{
 		{ "TraceLine", &LuaUtilTraceLine },
+		{ "TraceHull", &LuaUtilTraceHull },
+		{ "PrecacheModel", &LuaUtilPrecacheModel },
+		{ "PrecacheSound", &LuaUtilPrecacheSound },
 		{ NULL, NULL }
 	};
 	lua_newtable( state );

@@ -109,6 +109,54 @@ WEAPON_FILE_INFO_HANDLE LookupWeaponInfoSlot( const char *name )
 	return m_WeaponInfoDatabase.Find( name );
 }
 
+// A weapon script is normally responsible for assigning the HUD bucket and
+// position.  Mods which create a weapon at runtime may not ship a matching
+// scripts/<weapon>.txt, though.  Keep those weapons selectable by assigning
+// the first unused inventory position as a fallback.
+static void InitializeFallbackWeaponInfo( FileWeaponInfo_t *pFileInfo, const char *szWeaponName )
+{
+	if ( !pFileInfo )
+		return;
+
+	if ( !pFileInfo->szClassName[0] )
+	{
+		Q_strncpy( pFileInfo->szClassName, szWeaponName, sizeof( pFileInfo->szClassName ) );
+	}
+
+	// Do not move a fallback weapon every time Precache() retries a missing
+	// file.  The database entry remains unparsed until the file appears.
+	if ( pFileInfo->iSlot != 0 || pFileInfo->iPosition != 0 ||
+		m_WeaponInfoDatabase.Count() <= 1 )
+	{
+		return;
+	}
+
+	for ( int slot = 0; slot < MAX_WEAPON_SLOTS; ++slot )
+	{
+		for ( int position = 0; position < MAX_WEAPON_POSITIONS; ++position )
+		{
+			bool bUsed = false;
+			for ( int i = 0; i < m_WeaponInfoDatabase.Count(); ++i )
+			{
+				FileWeaponInfo_t *pOther = m_WeaponInfoDatabase[i];
+				if ( pOther != pFileInfo && pOther->szClassName[0] &&
+					pOther->iSlot == slot && pOther->iPosition == position )
+				{
+					bUsed = true;
+					break;
+				}
+			}
+
+			if ( !bUsed )
+			{
+				pFileInfo->iSlot = slot;
+				pFileInfo->iPosition = position;
+				return;
+			}
+		}
+	}
+}
+
 
 
 // FIXME, handle differently?
@@ -294,7 +342,10 @@ bool ReadWeaponDataFromFileForSlot( IFileSystem* filesystem, const char *szWeapo
 		);
 
 	if ( !pKV )
+	{
+		InitializeFallbackWeaponInfo( pFileInfo, szWeaponName );
 		return false;
+	}
 
 	pFileInfo->Parse( pKV, szWeaponName );
 
@@ -461,4 +512,3 @@ void FileWeaponInfo_t::Parse( KeyValues *pKeyValuesData, const char *szWeaponNam
 		}
 	}
 }
-

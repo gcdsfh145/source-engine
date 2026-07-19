@@ -146,6 +146,7 @@ private:
 	static int LuaConVarSet( struct lua_State *state );
 	static int LuaFileExists( struct lua_State *state );
 	static int LuaFileRead( struct lua_State *state );
+	static int LuaFileList( struct lua_State *state );
 	static int LuaFileWrite( struct lua_State *state );
 	static int LuaVectorNew( struct lua_State *state );
 	static int LuaVectorAdd( struct lua_State *state );
@@ -155,6 +156,10 @@ private:
 	static int LuaVectorLength( struct lua_State *state );
 	static int LuaVectorDistance( struct lua_State *state );
 	static int LuaVectorNormalize( struct lua_State *state );
+	static int LuaVectorMultiply( struct lua_State *state );
+	static int LuaVectorDivide( struct lua_State *state );
+	static int LuaVectorUnm( struct lua_State *state );
+	static int LuaVectorToString( struct lua_State *state );
 	static CLuaPluginManager *FromLuaState( struct lua_State *state );
 
 	void *m_state;
