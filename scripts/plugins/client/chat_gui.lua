@@ -27,7 +27,7 @@ local function redraw()
         {r = 8, g = 12, b = 20, a = 225})
     plugin.hud.create_text(titleId, 44, 618, "Lua GUI Chat", 24,
         {r = 255, g = 210, b = 90, a = 255})
-    plugin.hud.create_text(hintId, 44, 930, "Use the normal chat key to type | lua_chat_toggle toggles this panel", 14,
+    plugin.hud.create_text(hintId, 44, 930, "Tap the chat button or use the normal chat key | lua_chat_toggle toggles this panel", 14,
         {r = 180, g = 190, b = 205, a = 255})
 
     for _, id in ipairs(lineIds) do

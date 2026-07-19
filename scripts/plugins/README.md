@@ -590,6 +590,8 @@ Native AI 实体支持 `GetEnemy`、`SetEnemy`、`SetSchedule`、`ClearSchedule`
 直接启用 `scripts/plugins/server/chat_gui.lua` 和
 `scripts/plugins/client/chat_gui.lua` 即可使用。玩家使用原生聊天输入框发送消息，
 服务端广播后由客户端 Lua HUD 显示；`lua_chat_toggle` 可以隐藏或显示聊天面板。
+Android 版本会在左上角增加触摸聊天按钮，点击后打开原生聊天输入框并呼出软键盘，
+已有的 `Y` 键和控制台方式仍然可用。
 
 客户端 HUD 支持文本、矩形、颜色、位置、显示状态和删除：
 

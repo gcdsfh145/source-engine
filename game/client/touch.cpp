@@ -69,6 +69,19 @@ CTouchControls gTouch;
 static VTouchPanel g_TouchPanel;
 VTouchPanel *touch_panel = &g_TouchPanel;
 
+#ifdef ANDROID
+static void AddMobileChatButton()
+{
+	// Keep this button available even when the user has a custom touch.cfg.
+	// messagemode opens the native chat entry, which also activates Android's
+	// software keyboard through the existing SDL/VGUI text-input path.
+	rgba_t color( 255, 255, 255, 190 );
+	gTouch.RemoveButton( "lua_chat" );
+	gTouch.AddButton( "lua_chat", "vgui/touch/menu", "messagemode",
+		0.080000, 0.000000, 0.160000, 0.142222, color );
+}
+#endif
+
 CTouchPanel::CTouchPanel( vgui::VPANEL parent ) : BaseClass( NULL, "TouchPanel" )
 {
 	SetParent( parent );
@@ -356,6 +369,10 @@ void CTouchControls::ResetToDefaults()
 		engine->ExecuteClientCmd(buf);
 	}
 
+#ifdef ANDROID
+	AddMobileChatButton();
+#endif
+
 	WriteConfig();
 }
 
@@ -420,6 +437,10 @@ void CTouchControls::Init()
 	}
 	else
 		ResetToDefaults();
+
+#ifdef ANDROID
+	AddMobileChatButton();
+#endif
 
 	CTouchTexture *texture = new CTouchTexture;
 	texture->isInAtlas = false;
