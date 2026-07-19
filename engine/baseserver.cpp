@@ -77,6 +77,13 @@ static ConVar	sv_max_connects_window( "sv_max_connects_window", "4", 0, "Window 
 // This defaults to zero so that somebody spamming the server with packets cannot lock out other clients.
 static ConVar	sv_max_connects_sec_global( "sv_max_connects_sec_global", "0", 0, "Maximum connections per second to respond to from anywhere." );
 
+// Custom Source builds often use different steam.inf PatchVersion values even
+// though they still speak the same network protocol.  Allow those builds to
+// connect by default; CheckProtocol below continues to reject incompatible
+// wire protocols. Set this to 0 for strict patch-version matching.
+static ConVar	sv_allow_different_versions( "sv_allow_different_versions", "1", FCVAR_NOTIFY,
+	"Allow different steam.inf PatchVersion values when the network protocol matches." );
+
 static CIPRateLimit s_queryRateChecker( &sv_max_queries_sec, &sv_max_queries_window, &sv_max_queries_sec_global );
 static CIPRateLimit s_connectRateChecker( &sv_max_connects_sec, &sv_max_connects_window, &sv_max_connects_sec_global );
 
@@ -723,7 +730,8 @@ bool CBaseServer::ProcessConnectionlessPacket(netpacket_t * packet)
 				// checking.
 				const char *pszVersionInP4 = "2000";
 				const char *pszVersionString = GetSteamInfIDVersionInfo().szVersionString;
-				if ( V_strcmp( pszVersionString, pszVersionInP4 ) && V_strcmp( productVersion, pszVersionInP4 ) )
+				if ( !sv_allow_different_versions.GetBool() &&
+					V_strcmp( pszVersionString, pszVersionInP4 ) && V_strcmp( productVersion, pszVersionInP4 ) )
 				{
 					int nVersionCheck = Q_strncmp( pszVersionString, productVersion, V_strlen( pszVersionString ) );
 					if ( nVersionCheck < 0 )

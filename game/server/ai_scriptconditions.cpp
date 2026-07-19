@@ -335,7 +335,12 @@ bool CAI_ScriptConditions::EvalPlayerActorLOS( const EvalArgs_t &args )
 		return true;
 	}
 
-	return ( !args.pActor || PlayerHasLineOfSight( args.pPlayer, args.pActor, m_fPlayerActorLOS == TRS_FALSE ) );
+	if ( !args.pActor )
+		return true;
+	if ( !args.pPlayer )
+		return false;
+
+	return PlayerHasLineOfSight( args.pPlayer, args.pActor, m_fPlayerActorLOS == TRS_FALSE );
 }
 
 //-----------------------------------------------------------------------------
@@ -348,7 +353,12 @@ bool CAI_ScriptConditions::EvalPlayerTargetLOS( const EvalArgs_t &args )
 		return true;
 	}
 
-	return ( !args.pTarget || PlayerHasLineOfSight( args.pPlayer, args.pTarget, m_fPlayerTargetLOS == TRS_FALSE ) );
+	if ( !args.pTarget )
+		return true;
+	if ( !args.pPlayer )
+		return false;
+
+	return PlayerHasLineOfSight( args.pPlayer, args.pTarget, m_fPlayerTargetLOS == TRS_FALSE );
 }
 
 bool CAI_ScriptConditions::EvalActorInPVS( const EvalArgs_t &args )
@@ -686,6 +696,9 @@ void CAI_ScriptConditions::InputDisable( inputdata_t &inputdata )
 
 bool CAI_ScriptConditions::IsInFOV( CBaseEntity *pViewer, CBaseEntity *pViewed, float fov, bool bTrueCone )
 {
+	if ( !pViewer || !pViewed )
+		return false;
+
 	CBaseCombatCharacter *pCombatantViewer = (pViewer) ? pViewer->MyCombatCharacterPointer() : NULL;
 
 	if ( fov < 360 && pCombatantViewer /*&& pViewed*/ )
@@ -741,6 +754,9 @@ bool CAI_ScriptConditions::IsInFOV( CBaseEntity *pViewer, CBaseEntity *pViewed, 
 
 bool CAI_ScriptConditions::PlayerHasLineOfSight( CBaseEntity *pViewer, CBaseEntity *pViewed, bool fNot )
 {
+	if ( !pViewer || !pViewed )
+		return false;
+
 	CBaseCombatCharacter *pCombatantViewer = pViewer->MyCombatCharacterPointer();
 
 	if( pCombatantViewer )
