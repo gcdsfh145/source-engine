@@ -116,6 +116,16 @@ end
 数字和布尔值。`GetKeyValue` 读取引擎能提供的 KeyValue，未知字段返回 `nil`。
 `SetKeyValue`、`SetModel` 和实体创建属于服务端操作。
 
+实体还支持 Mod 常用的显示和碰撞查询：
+
+```lua
+local mins, maxs = ent:GetBounds()
+ent:SetNoDraw(true)
+if ent:IsNoDraw() then
+    ent:SetNoDraw(false)
+end
+```
+
 动画模型还可以通过挂点制作炮口、特效和装备位置：
 
 ```lua
@@ -156,6 +166,34 @@ end
 -- 可指定跳跃高度；不传时使用游戏默认高度。
 p:Jump(45)
 ```
+
+### 玩家身份、视线和范围效果
+
+服务端玩家支持稳定的网络身份、最大生命值和视线 Trace：
+
+```lua
+local id = ply:network_id()
+ply:SetMaxHealth(150)
+local trace = ply:EyeTrace(2048)
+if trace.Hit and trace.Entity then
+    trace.Entity:TakeDamage(25, ply, nil, 0)
+end
+```
+
+服务端 `util` 还提供范围伤害和屏幕震动。它们分别需要
+`entity.damage` 和 `world.effect` 权限：
+
+```lua
+plugin.Manifest({
+    permissions = { "entity.damage", "world.effect" }
+})
+
+util.RadiusDamage(Vector(0, 0, 64), 80, 256, ply, 64, ply)
+util.ScreenShake(Vector(0, 0, 64), 12, 150, 0.8, 600, true)
+```
+
+完整的成长、技能、自定义武器和 NPC 组合示例见
+`scripts/plugins/examples/server/rpg_mod_foundation.lua`。
 
 ## 游戏状态
 
@@ -590,8 +628,7 @@ Native AI 实体支持 `GetEnemy`、`SetEnemy`、`SetSchedule`、`ClearSchedule`
 直接启用 `scripts/plugins/server/chat_gui.lua` 和
 `scripts/plugins/client/chat_gui.lua` 即可使用。玩家使用原生聊天输入框发送消息，
 服务端广播后由客户端 Lua HUD 显示；`lua_chat_toggle` 可以隐藏或显示聊天面板。
-Android 版本会在左上角增加触摸聊天按钮，点击后打开原生聊天输入框并呼出软键盘，
-已有的 `Y` 键和控制台方式仍然可用。
+Android 版本使用原生聊天输入框，已有的 `Y` 键和控制台方式仍然可用。
 
 客户端 HUD 支持文本、矩形、颜色、位置、显示状态和删除：
 

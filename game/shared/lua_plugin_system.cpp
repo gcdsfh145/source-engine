@@ -20,6 +20,7 @@
 #include "ai_basenpc.h"
 #include "recipientfilter.h"
 #include "util_shared.h"
+#include "util.h"
 #include "takedamageinfo.h"
 #include "variant_t.h"
 #endif
@@ -775,6 +776,13 @@ static int LuaEntityIsValid( lua_State *state )
 	return 1;
 }
 
+static int LuaEntityIsPlayer( lua_State *state )
+{
+	CBaseEntity *entity = LuaEntityPointer( state, 1 );
+	lua_pushboolean( state, entity && entity->IsPlayer() );
+	return 1;
+}
+
 static int LuaEntityGetIndex( lua_State *state )
 {
 	lua_pushinteger( state, LuaEntityIndex( state, 1 ) );
@@ -1212,6 +1220,49 @@ static int LuaUtilTraceHull( lua_State *state )
 	return 1;
 }
 
+static int LuaUtilScreenShake( lua_State *state )
+{
+	if ( s_LuaServerManager && !s_LuaServerManager->HasPermission( "world.effect" ) )
+		return luaL_error( state, "plugin permission denied: world.effect" );
+	Vector origin;
+	if ( !LuaReadVector( state, 1, origin ) )
+		return luaL_error( state, "util.ScreenShake expects an origin vector" );
+	float amplitude = (float)luaL_optnumber( state, 2, 10.0f );
+	float frequency = (float)luaL_optnumber( state, 3, 150.0f );
+	float duration = (float)luaL_optnumber( state, 4, 1.0f );
+	float radius = (float)luaL_optnumber( state, 5, 750.0f );
+	bool airShake = lua_toboolean( state, 6 ) != 0;
+	if ( amplitude < 0.0f || frequency < 0.0f || duration <= 0.0f || radius <= 0.0f )
+		return luaL_error( state, "util.ScreenShake received invalid values" );
+	UTIL_ScreenShake( origin, amplitude, frequency, duration, radius, SHAKE_START, airShake );
+	return 0;
+}
+
+static int LuaUtilRadiusDamage( lua_State *state )
+{
+	if ( s_LuaServerManager && !s_LuaServerManager->HasPermission( "entity.damage" ) )
+		return luaL_error( state, "plugin permission denied: entity.damage" );
+	Vector origin;
+	if ( !LuaReadVector( state, 1, origin ) )
+		return luaL_error( state, "util.RadiusDamage expects an origin vector" );
+	float damage = (float)luaL_checknumber( state, 2 );
+	float radius = (float)luaL_checknumber( state, 3 );
+	CBaseEntity *attacker = lua_isuserdata( state, 4 ) ? LuaEntityPointer( state, 4 ) : NULL;
+	int damageType = (int)luaL_optinteger( state, 5, DMG_BLAST );
+	CBaseEntity *ignore = lua_isuserdata( state, 6 ) ? LuaEntityPointer( state, 6 ) : NULL;
+	if ( damage <= 0.0f || radius <= 0.0f )
+		return luaL_error( state, "util.RadiusDamage expects positive damage and radius" );
+	if ( !g_pGameRules )
+	{
+		lua_pushboolean( state, 0 );
+		return 1;
+	}
+	CTakeDamageInfo info( attacker, attacker, damage, damageType );
+	g_pGameRules->RadiusDamage( info, origin, radius, CLASS_NONE, ignore );
+	lua_pushboolean( state, 1 );
+	return 1;
+}
+
 static int LuaUtilPrecacheModel( lua_State *state )
 {
 	if ( s_LuaServerManager && !s_LuaServerManager->HasPermission( "resource.precache" ) )
@@ -1416,6 +1467,19 @@ static int LuaPlayerGetName( lua_State *state )
 	return 1;
 }
 
+static int LuaPlayerGetNetworkID( lua_State *state )
+{
+#ifdef CLIENT_DLL
+	(void)state;
+	return luaL_error( state, "player:network_id is server-only" );
+#else
+	CBasePlayer *player = ToBasePlayer( LuaEntityPointer( state, 1 ) );
+	if ( !player ) return 0;
+	lua_pushstring( state, player->GetNetworkIDString() );
+	return 1;
+#endif
+}
+
 static int LuaPlayerIsAlive( lua_State *state )
 {
 	CBasePlayer *player = ToBasePlayer( LuaEntityPointer( state, 1 ) );
@@ -1533,6 +1597,42 @@ static int LuaEntityGetFlags( lua_State *state )
 	if ( !entity ) return 0;
 	lua_pushinteger( state, entity->GetFlags() );
 	return 1;
+}
+
+static int LuaEntityIsNoDraw( lua_State *state )
+{
+	CBaseEntity *entity = LuaEntityPointer( state, 1 );
+	lua_pushboolean( state, entity && entity->IsEffectActive( EF_NODRAW ) );
+	return 1;
+}
+
+static int LuaEntitySetNoDraw( lua_State *state )
+{
+	CBaseEntity *entity = LuaEntityPointer( state, 1 );
+	bool hidden = lua_toboolean( state, 2 ) != 0;
+	if ( !entity )
+	{
+		lua_pushboolean( state, 0 );
+		return 1;
+	}
+	if ( hidden )
+		entity->AddEffects( EF_NODRAW );
+	else
+		entity->RemoveEffects( EF_NODRAW );
+	lua_pushboolean( state, 1 );
+	return 1;
+}
+
+static int LuaEntityGetBounds( lua_State *state )
+{
+	CBaseEntity *entity = LuaEntityPointer( state, 1 );
+	if ( !entity ) return 0;
+	Vector mins;
+	Vector maxs;
+	entity->CollisionProp()->WorldSpaceAABB( &mins, &maxs );
+	LuaPushVector( state, mins );
+	LuaPushVector( state, maxs );
+	return 2;
 }
 
 static int LuaEntityGetMoveType( lua_State *state )
@@ -1983,6 +2083,35 @@ static int LuaPlayerGetEyePos( lua_State *state )
 	return 1;
 }
 
+static int LuaPlayerEyeTrace( lua_State *state )
+{
+#ifdef CLIENT_DLL
+	(void)state;
+	return luaL_error( state, "Player:EyeTrace is server-only" );
+#else
+	CBasePlayer *player = ToBasePlayer( LuaEntityPointer( state, 1 ) );
+	if ( !player ) return 0;
+	float distance = (float)luaL_optnumber( state, 2, 8192.0f );
+	if ( distance <= 0.0f )
+		return luaL_error( state, "Player:EyeTrace distance must be positive" );
+	Vector direction;
+	AngleVectors( player->EyeAngles(), &direction );
+	trace_t trace;
+	UTIL_TraceLine( player->EyePosition(), player->EyePosition() + direction * distance,
+		MASK_SHOT, player, COLLISION_GROUP_NONE, &trace );
+	lua_newtable( state );
+	lua_pushboolean( state, trace.DidHit() ? 1 : 0 ); lua_setfield( state, -2, "Hit" );
+	lua_pushnumber( state, trace.fraction ); lua_setfield( state, -2, "Fraction" );
+	LuaPushVector( state, trace.endpos ); lua_setfield( state, -2, "HitPos" );
+	LuaPushVector( state, trace.plane.normal ); lua_setfield( state, -2, "HitNormal" );
+	lua_pushinteger( state, trace.hitgroup ); lua_setfield( state, -2, "HitGroup" );
+	if ( trace.m_pEnt ) LuaPushEntity( state, trace.m_pEnt->entindex() );
+	else lua_pushnil( state );
+	lua_setfield( state, -2, "Entity" );
+	return 1;
+#endif
+}
+
 static int LuaPlayerGetUserID( lua_State *state )
 {
 	CBasePlayer *player = ToBasePlayer( LuaEntityPointer( state, 1 ) );
@@ -2137,6 +2266,27 @@ static int LuaPlayerGetMaxHealth( lua_State *state )
 	if ( !player ) return 0;
 	lua_pushinteger( state, player->GetMaxHealth() );
 	return 1;
+}
+
+static int LuaPlayerSetMaxHealth( lua_State *state )
+{
+#ifdef CLIENT_DLL
+	(void)state;
+	return luaL_error( state, "Player:SetMaxHealth is server-only" );
+#else
+	CBasePlayer *player = ToBasePlayer( LuaEntityPointer( state, 1 ) );
+	int maxHealth = (int)luaL_checkinteger( state, 2 );
+	if ( !player || maxHealth <= 0 )
+	{
+		lua_pushboolean( state, 0 );
+		return 1;
+	}
+	player->m_iMaxHealth = maxHealth;
+	if ( player->GetHealth() > maxHealth )
+		player->SetHealth( maxHealth );
+	lua_pushboolean( state, 1 );
+	return 1;
+#endif
 }
 
 static int LuaPlayerGetArmor( lua_State *state )
@@ -2867,12 +3017,17 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 	static const luaL_Reg entityMethods[] =
 	{
 		{ "is_valid",     &LuaEntityIsValid },
+		{ "is_player",    &LuaEntityIsPlayer },
 		{ "index",        &LuaEntityGetIndex },
 		{ "classname",    &LuaEntityGetClassname },
 		{ "IsValid",      &LuaEntityIsValid },
+		{ "IsPlayer",     &LuaEntityIsPlayer },
 		{ "EntIndex",     &LuaEntityGetIndex },
 		{ "GetClass",     &LuaEntityGetClassname },
 		{ "flags",        &LuaEntityGetFlags },
+		{ "IsNoDraw",     &LuaEntityIsNoDraw },
+		{ "SetNoDraw",    &LuaEntitySetNoDraw },
+		{ "GetBounds",    &LuaEntityGetBounds },
 		{ "move_type",    &LuaEntityGetMoveType },
 		{ "origin",       &LuaEntityGetOrigin },
 		{ "set_origin",   &LuaEntitySetOrigin },
@@ -2927,6 +3082,7 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "Nick",         &LuaPlayerGetName },
 		{ "Alive",        &LuaPlayerIsAlive },
 		{ "userid",       &LuaPlayerGetUserID },
+		{ "network_id",   &LuaPlayerGetNetworkID },
 		{ "buttons",      &LuaPlayerGetButtons },
 		{ "max_speed",    &LuaPlayerGetMaxSpeed },
 		{ "grounded",     &LuaPlayerIsGrounded },
@@ -2960,11 +3116,13 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "WaterLevel",   &LuaPlayerGetWaterLevel },
 		{ "EyeAngles",    &LuaPlayerGetEyeAngles },
 		{ "EyePos",       &LuaPlayerGetEyePos },
+		{ "EyeTrace",     &LuaPlayerEyeTrace },
 		{ "Jump",         &LuaPlayerJump },
 		{ "Spawn",        &LuaPlayerSpawn },
 		{ "Kill",         &LuaPlayerKill },
 		{ "ChatPrint",    &LuaPlayerChatPrint },
 		{ "GetMaxHealth", &LuaPlayerGetMaxHealth },
+		{ "SetMaxHealth", &LuaPlayerSetMaxHealth },
 		{ "Armor",        &LuaPlayerGetArmor },
 		{ "SetArmor",     &LuaPlayerSetArmor },
 		{ "StripWeapons", &LuaPlayerStripWeapons },
@@ -3169,7 +3327,13 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 	static const luaL_Reg utilFunctions[] =
 	{
 		{ "TraceLine", &LuaUtilTraceLine },
+		{ "trace_line", &LuaUtilTraceLine },
 		{ "TraceHull", &LuaUtilTraceHull },
+		{ "trace_hull", &LuaUtilTraceHull },
+		{ "ScreenShake", &LuaUtilScreenShake },
+		{ "screen_shake", &LuaUtilScreenShake },
+		{ "RadiusDamage", &LuaUtilRadiusDamage },
+		{ "radius_damage", &LuaUtilRadiusDamage },
 		{ "PrecacheModel", &LuaUtilPrecacheModel },
 		{ "PrecacheSound", &LuaUtilPrecacheSound },
 		{ NULL, NULL }
