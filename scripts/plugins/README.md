@@ -88,6 +88,7 @@ end
 移动诊断 API：`p:vertical_velocity()` 返回 Z 轴速度，`p:fall_speed()` 返回当前下落速度，
 `p:ground_entity()` 返回脚下实体（没有脚下实体时返回 `nil`）。服务端可以用
 `p:SetLaggedMovementValue(scale)` 调整玩家整体移动时间倍率，范围为 `0` 到 `4`；默认值为 `1`。
+`p:GetMaxSpeed()` 和服务端的 `p:SetMaxSpeed(speed)` 可控制水平移动上限，不会改变重力下落。
 
 ### Mod 实体外观、物理和 KeyValue
 
@@ -203,6 +204,7 @@ hook.Add("PlayerSay", "where_command", function(ply, text)
     if ply and text == "!where" then
         local pos = ply:GetPos()
         ply:ChatPrint(string.format("%.0f %.0f %.0f", pos.x, pos.y, pos.z))
+        return false -- 阻止原消息广播
     end
 end)
 
@@ -221,6 +223,8 @@ end)
 GMod 风格 hook 的玩家参数是实体 userdata，可以直接调用 `Nick`、`Health`、
 `SetHealth`、`Give`、`ChatPrint`、`GetPos` 等方法。`plugin.on` 保持旧接口，玩家
 参数仍然是 userid 或实体索引，便于兼容旧脚本。
+
+`PlayerSay` 是可拦截 Hook：返回 `false` 会阻止聊天消息广播，返回 `nil` 或 `true` 则继续。
 
 服务端常用实体操作：
 
@@ -456,6 +460,16 @@ plugin.on("net_message", function(name, payload)
 end)
 ```
 
+也可以按消息名注册接收回调，回调中直接读取 Typed Net 字段：
+
+```lua
+net.Receive("score", function()
+    local score = net.ReadInt()
+    local pos = net.ReadVector()
+    plugin.log("score", score, pos)
+end)
+```
+
 标准库只开放 `base`、`table`、`string` 和 `math`；`io`、`os`、`debug`、`package` 不开放。
 
 ## C++ 主菜单管理
@@ -493,7 +507,8 @@ plugin.Manifest({
 })
 
 local enabled = plugin.config_get("welcome", false)
-plugin.config_set("max_npcs", 12)
+local saved = plugin.config_set("max_npcs", 12) -- 自动保存到插件 cfg
+plugin.config_save() -- 也可以手动保存
 local info = plugin.info()
 plugin.log(info.name, info.version, plugin.has_permission("net.send"))
 ```
@@ -525,6 +540,10 @@ local guard = npcs.Create("npc_guard")
 
 Native AI 实体支持 `GetEnemy`、`SetEnemy`、`SetSchedule`、`ClearSchedule` 和
 `SetCondition`。普通 `lua_npc` 仍适合完全由 Lua 驱动的 Boss、宠物和炮塔。
+自定义 NPC 还支持 `Touch(index, otherIndex)`、`Use(index, activatorIndex)` 和
+`OnRemove(index)` 回调；武器支持 `OnDeploy(index, ...)`、`OnHolster(index)`。
+插件卸载时会自动移除自己的定义，也可以主动调用 `weapons.Unregister(name)` 或
+`npcs.Unregister(name)`。
 
 ## HUD、Typed Net 和伤害 Hook
 
@@ -564,6 +583,14 @@ end)
 hook.Add("EntityTakeDamage", "friendly_fire_guard", function(ent, damage, attacker)
     if ent == attacker then return false end
 end)
+```
+
+`plugin.debug_stats()` 返回当前 Lua 状态的插件数、回调数、定时器数、本帧回调数和
+累计指令数，可用于定位插件卡顿：
+
+```lua
+local stats = plugin.debug_stats()
+plugin.log(stats.plugins, stats.callbacks, stats.timers, stats.instructions)
 ```
 
 ## 限制和诊断

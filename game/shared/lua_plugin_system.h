@@ -18,6 +18,7 @@ class CTakeDamageInfo;
 #ifndef CLIENT_DLL
 void LuaServerPluginClientPutInServer( edict_t *entity, const char *playerName );
 void LuaServerPluginClientDisconnect( edict_t *entity );
+bool LuaServerPluginPlayerSay( CBaseEntity *player, const char *text );
 bool LuaServerPluginEntityTakeDamage( CBaseEntity *entity, const CTakeDamageInfo &info );
 #endif
 

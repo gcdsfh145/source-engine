@@ -23,6 +23,7 @@ extern "C"
 #include "tier1/tier1.h"
 #include "tier1/strtools.h"
 #include "tier1/utlbuffer.h"
+#include "KeyValues.h"
 #include "tier0/dbg.h"
 
 // memdbgon must be the last include file in a .cpp file.
@@ -281,11 +282,13 @@ bool CLuaPluginManager::Init( IFileSystem *fileSystem, const char *pathID, const
 		{ "require_permission", &CLuaPluginManager::LuaRequirePermission },
 		{ "config_get",       &CLuaPluginManager::LuaConfigGet },
 		{ "config_set",       &CLuaPluginManager::LuaConfigSet },
+		{ "config_save",      &CLuaPluginManager::LuaConfigSave },
 		{ "info",             &CLuaPluginManager::LuaPluginInfo },
 		{ "reload",           &CLuaPluginManager::LuaReloadSelf },
 		{ "execute",          &CLuaPluginManager::LuaExecute },
 		{ "on",               &CLuaPluginManager::LuaOn },
 		{ "register_command", &CLuaPluginManager::LuaRegisterCommand },
+		{ "debug_stats",     &CLuaPluginManager::LuaDebugStats },
 		{ NULL, NULL }
 	};
 
@@ -382,6 +385,7 @@ bool CLuaPluginManager::Init( IFileSystem *fileSystem, const char *pathID, const
 	static const luaL_Reg customWeaponFunctions[] =
 	{
 		{ "Register", &CLuaPluginManager::LuaRegisterCustomWeapon },
+		{ "Unregister", &CLuaPluginManager::LuaUnregisterCustomWeapon },
 		{ NULL, NULL }
 	};
 	lua_newtable( state );
@@ -391,6 +395,7 @@ bool CLuaPluginManager::Init( IFileSystem *fileSystem, const char *pathID, const
 	static const luaL_Reg customNPCFunctions[] =
 	{
 		{ "Register", &CLuaPluginManager::LuaRegisterCustomNPC },
+		{ "Unregister", &CLuaPluginManager::LuaUnregisterCustomNPC },
 		{ NULL, NULL }
 	};
 	lua_newtable( state );
@@ -599,6 +604,19 @@ bool CLuaPluginManager::RegisterCustomDefinition( const char *kind, const char *
 	definition->plugin = m_currentPlugin;
 	definition->tableRef = luaL_ref( state, LUA_REGISTRYINDEX );
 	m_customDefinitions.AddToTail( definition );
+	return true;
+}
+
+bool CLuaPluginManager::UnregisterCustomDefinition( const char *kind, const char *name )
+{
+	if ( !m_state || !m_currentPlugin || !kind || !name )
+		return false;
+	LuaCustomDefinition *definition = FindCustomDefinition( kind, name );
+	if ( !definition || definition->plugin != m_currentPlugin )
+		return false;
+	luaL_unref( (lua_State *)m_state, LUA_REGISTRYINDEX, definition->tableRef );
+	m_customDefinitions.FindAndRemove( definition );
+	delete definition;
 	return true;
 }
 
@@ -1224,6 +1242,44 @@ void CLuaPluginManager::ClientDisconnect( int entIndex )
 	EmitEvent( "client_disconnect", entIndex );
 }
 
+bool CLuaPluginManager::PlayerSay( int entIndex, const char *text )
+{
+	if ( !m_state )
+		return true;
+
+	lua_State *state = (lua_State *)m_state;
+	bool allow = true;
+	for ( int i = 0; i < m_events.Count(); ++i )
+	{
+		LuaEvent *event = m_events[i];
+		if ( Q_stricmp( event->name, "player_say" ) || !event->identifier[0] ||
+			event->plugin->faulted )
+			continue;
+		if ( !BeginScriptCallback() )
+			break;
+
+		LuaPlugin *plugin = event->plugin;
+		int functionRef = event->functionRef;
+		lua_rawgeti( state, LUA_REGISTRYINDEX, functionRef );
+		LuaPushHookPlayer( state, entIndex, false );
+		lua_pushstring( state, text ? text : "" );
+		LuaPlugin *previousPlugin = m_currentPlugin;
+		m_currentPlugin = plugin;
+		int result = lua_pcall( state, 2, 1, 0 );
+		m_currentPlugin = previousPlugin;
+		if ( result != 0 )
+		{
+			RecordPluginError( plugin, "PlayerSay" );
+			LuaReportError( state, "PlayerSay" );
+			continue;
+		}
+		if ( lua_isboolean( state, -1 ) && !lua_toboolean( state, -1 ) )
+			allow = false;
+		lua_pop( state, 1 );
+	}
+	return allow;
+}
+
 void CLuaPluginManager::NetworkMessage( const char *name, const char *payload )
 {
 	if ( !m_state || !name )
@@ -1237,6 +1293,10 @@ void CLuaPluginManager::NetworkMessage( const char *name, const char *payload )
 		LuaEvent *event = m_events[i];
 		if ( Q_stricmp( event->name, "net_message" ) || event->plugin->faulted )
 			continue;
+		// Events registered through net.Receive are filtered by message name;
+		// legacy plugin.on("net_message", ...) listeners still receive all messages.
+		if ( event->identifier[0] && Q_stricmp( event->identifier, name ) )
+			continue;
 		LuaPlugin *plugin = event->plugin;
 		int functionRef = event->functionRef;
 		if ( !BeginScriptCallback() )
@@ -1244,11 +1304,14 @@ void CLuaPluginManager::NetworkMessage( const char *name, const char *payload )
 		m_networkReadOffset = 0;
 
 		lua_rawgeti( state, LUA_REGISTRYINDEX, functionRef );
-		lua_pushstring( state, name );
-		lua_pushstring( state, payload ? payload : "" );
+		if ( !event->identifier[0] )
+		{
+			lua_pushstring( state, name );
+			lua_pushstring( state, payload ? payload : "" );
+		}
 		LuaPlugin *previousPlugin = m_currentPlugin;
 		m_currentPlugin = plugin;
-		int result = lua_pcall( state, 2, 0, 0 );
+		int result = lua_pcall( state, event->identifier[0] ? 0 : 2, 0, 0 );
 		m_currentPlugin = previousPlugin;
 		if ( result != 0 )
 		{
@@ -1256,6 +1319,34 @@ void CLuaPluginManager::NetworkMessage( const char *name, const char *payload )
 			LuaReportError( state, "net_message" );
 		}
 	}
+}
+
+bool CLuaPluginManager::RegisterNetworkReceiver( lua_State *state, const char *name, int functionIndex )
+{
+	if ( !state || !name || !name[0] || !m_currentPlugin )
+		return false;
+	if ( Q_strlen( name ) >= 120 || !lua_isfunction( state, functionIndex ) )
+		return false;
+
+	for ( int i = m_events.Count() - 1; i >= 0; --i )
+	{
+		LuaEvent *event = m_events[i];
+		if ( event->plugin != m_currentPlugin || Q_stricmp( event->name, "net_message" ) ||
+			Q_stricmp( event->identifier, name ) )
+			continue;
+		luaL_unref( state, LUA_REGISTRYINDEX, event->functionRef );
+		delete event;
+		m_events.Remove( i );
+	}
+
+	lua_pushvalue( state, functionIndex );
+	LuaEvent *event = new LuaEvent;
+	Q_strncpy( event->name, "net_message", sizeof( event->name ) );
+	Q_strncpy( event->identifier, name, sizeof( event->identifier ) );
+	event->plugin = m_currentPlugin;
+	event->functionRef = luaL_ref( state, LUA_REGISTRYINDEX );
+	m_events.AddToTail( event );
+	return true;
 }
 
 bool CLuaPluginManager::NetworkAppendToken( const char *token )
@@ -1384,6 +1475,9 @@ void CLuaPluginManager::GameEvent( const char *eventName, int value1, int value2
 		LuaPlugin *plugin = event->plugin;
 		int functionRef = event->functionRef;
 		bool isHook = event->identifier[0] != '\0';
+		// PlayerSay hooks run before chat is broadcast so they can return false.
+		if ( isHook && !Q_stricmp( eventName, "player_say" ) )
+			continue;
 		if ( !BeginScriptCallback() )
 			break;
 
@@ -1602,6 +1696,20 @@ int CLuaPluginManager::LuaLog( lua_State *state )
 	return 0;
 }
 
+int CLuaPluginManager::LuaDebugStats( lua_State *state )
+{
+	CLuaPluginManager *manager = FromLuaState( state );
+	if ( !manager ) return 0;
+	lua_newtable( state );
+	lua_pushstring( state, manager->m_role ); lua_setfield( state, -2, "role" );
+	lua_pushinteger( state, manager->m_plugins.Count() ); lua_setfield( state, -2, "plugins" );
+	lua_pushinteger( state, manager->m_events.Count() ); lua_setfield( state, -2, "callbacks" );
+	lua_pushinteger( state, manager->m_timers.Count() ); lua_setfield( state, -2, "timers" );
+	lua_pushinteger( state, manager->m_frameCallbackCount ); lua_setfield( state, -2, "frame_callbacks" );
+	lua_pushinteger( state, manager->m_instructionCount ); lua_setfield( state, -2, "instructions" );
+	return 1;
+}
+
 int CLuaPluginManager::LuaRole( lua_State *state )
 {
 	CLuaPluginManager *manager = FromLuaState( state );
@@ -1659,6 +1767,7 @@ int CLuaPluginManager::LuaManifest( lua_State *state )
 		lua_newtable( state );
 		plugin->configRef = luaL_ref( state, LUA_REGISTRYINDEX );
 	}
+	manager->LoadPluginConfig( plugin );
 	return 0;
 }
 
@@ -1676,6 +1785,78 @@ int CLuaPluginManager::LuaRequirePermission( lua_State *state )
 	if ( !manager || !manager->HasPermission( permission ) )
 		return luaL_error( state, "plugin permission denied: %s", permission );
 	return 0;
+}
+
+bool CLuaPluginManager::LoadPluginConfig( LuaPlugin *plugin )
+{
+	if ( !m_state || !m_fileSystem || !plugin || plugin->configRef == LUA_NOREF )
+		return false;
+
+	char path[256];
+	Q_snprintf( path, sizeof( path ), "%s/%s.cfg", m_pluginRoot, plugin->name );
+	KeyValues *data = new KeyValues( "LuaConfig" );
+	if ( !data->LoadFromFile( m_fileSystem, path, "DEFAULT_WRITE_PATH" ) )
+	{
+		data->deleteThis();
+		return false;
+	}
+
+	lua_State *state = (lua_State *)m_state;
+	lua_rawgeti( state, LUA_REGISTRYINDEX, plugin->configRef );
+	for ( KeyValues *item = data->GetFirstSubKey(); item; item = item->GetNextKey() )
+	{
+		const char *encoded = item->GetString();
+		if ( !encoded || encoded[0] == '\0' || encoded[1] != ':' )
+			continue;
+		if ( encoded[0] == 'b' )
+			lua_pushboolean( state, atoi( encoded + 2 ) != 0 );
+		else if ( encoded[0] == 'n' )
+			lua_pushnumber( state, atof( encoded + 2 ) );
+		else if ( encoded[0] == 's' )
+			lua_pushstring( state, encoded + 2 );
+		else
+			continue;
+		lua_setfield( state, -2, item->GetName() );
+	}
+	lua_pop( state, 1 );
+	data->deleteThis();
+	return true;
+}
+
+bool CLuaPluginManager::SavePluginConfig( LuaPlugin *plugin ) const
+{
+	if ( !m_state || !m_fileSystem || !plugin || plugin->configRef == LUA_NOREF )
+		return false;
+
+	char path[256];
+	Q_snprintf( path, sizeof( path ), "%s/%s.cfg", m_pluginRoot, plugin->name );
+	KeyValues *data = new KeyValues( "LuaConfig" );
+	lua_State *state = (lua_State *)m_state;
+	lua_rawgeti( state, LUA_REGISTRYINDEX, plugin->configRef );
+	lua_pushnil( state );
+	while ( lua_next( state, -2 ) != 0 )
+	{
+		if ( lua_isstring( state, -2 ) )
+		{
+			char encoded[1024];
+			const char *key = lua_tostring( state, -2 );
+			if ( lua_isboolean( state, -1 ) )
+				Q_snprintf( encoded, sizeof( encoded ), "b:%d", lua_toboolean( state, -1 ) ? 1 : 0 );
+			else if ( lua_isnumber( state, -1 ) )
+				Q_snprintf( encoded, sizeof( encoded ), "n:%.9g", lua_tonumber( state, -1 ) );
+			else if ( lua_isstring( state, -1 ) )
+				Q_snprintf( encoded, sizeof( encoded ), "s:%s", lua_tostring( state, -1 ) );
+			else
+				encoded[0] = '\0';
+			if ( encoded[0] )
+				data->SetString( key, encoded );
+		}
+		lua_pop( state, 1 );
+	}
+	lua_pop( state, 1 );
+	bool saved = data->SaveToFile( m_fileSystem, path, "DEFAULT_WRITE_PATH" );
+	data->deleteThis();
+	return saved;
 }
 
 int CLuaPluginManager::LuaConfigGet( lua_State *state )
@@ -1715,7 +1896,19 @@ int CLuaPluginManager::LuaConfigSet( lua_State *state )
 	lua_pushvalue( state, 2 );
 	lua_setfield( state, -2, luaL_checkstring( state, 1 ) );
 	lua_pop( state, 1 );
-	return 0;
+	lua_pushboolean( state, manager->SavePluginConfig( manager->m_currentPlugin ) );
+	return 1;
+}
+
+int CLuaPluginManager::LuaConfigSave( lua_State *state )
+{
+	CLuaPluginManager *manager = FromLuaState( state );
+	if ( !manager || !manager->m_currentPlugin )
+		return luaL_error( state, "plugin.config_save may only be called by a plugin" );
+	if ( !manager->HasPermission( "config.write" ) )
+		return luaL_error( state, "plugin permission denied: config.write" );
+	lua_pushboolean( state, manager->SavePluginConfig( manager->m_currentPlugin ) );
+	return 1;
 }
 
 int CLuaPluginManager::LuaPluginInfo( lua_State *state )
@@ -1941,6 +2134,24 @@ int CLuaPluginManager::LuaRegisterCustomNPC( lua_State *state )
 	if ( !manager->RegisterCustomDefinition( "npc", name, state, 2 ) )
 		return luaL_error( state, "unable to register NPC '%s'", name );
 	return 0;
+}
+
+int CLuaPluginManager::LuaUnregisterCustomWeapon( lua_State *state )
+{
+	CLuaPluginManager *manager = FromLuaState( state );
+	if ( !manager || !manager->m_currentPlugin )
+		return luaL_error( state, "weapons.Unregister may only be called by a plugin" );
+	lua_pushboolean( state, manager->UnregisterCustomDefinition( "weapon", luaL_checkstring( state, 1 ) ) );
+	return 1;
+}
+
+int CLuaPluginManager::LuaUnregisterCustomNPC( lua_State *state )
+{
+	CLuaPluginManager *manager = FromLuaState( state );
+	if ( !manager || !manager->m_currentPlugin )
+		return luaL_error( state, "npcs.Unregister may only be called by a plugin" );
+	lua_pushboolean( state, manager->UnregisterCustomDefinition( "npc", luaL_checkstring( state, 1 ) ) );
+	return 1;
 }
 
 int CLuaPluginManager::LuaRegisterCommand( lua_State *state )

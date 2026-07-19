@@ -35,6 +35,7 @@
 #include "datacache/imdlcache.h"
 #include "basemultiplayerplayer.h"
 #include "voice_gamemgr.h"
+#include "lua_plugin_system.h"
 
 #ifdef TF_DLL
 #include "tf_player.h"
@@ -149,6 +150,9 @@ void Host_Say( edict_t *pEdict, const CCommand &args, bool teamonly )
 	}
 
 	if ( !p )
+		return;
+
+	if ( pPlayer && !LuaServerPluginPlayerSay( pPlayer, p ) )
 		return;
 
 	if ( pEdict )

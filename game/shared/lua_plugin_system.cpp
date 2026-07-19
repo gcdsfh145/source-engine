@@ -221,6 +221,24 @@ public:
 		return BaseClass::Reload();
 	}
 
+	virtual bool Deploy()
+	{
+		CLuaPluginManager *manager = LuaGamePluginManager();
+		bool allow = true;
+		if ( manager && manager->CallCustomEntityHook( "weapon", m_luaDefinition,
+			"OnDeploy", entindex(), -1.0f, -1, &allow ) && !allow )
+			return false;
+		return BaseClass::Deploy();
+	}
+
+	virtual bool Holster( CBaseCombatWeapon *switchingTo = NULL )
+	{
+		CLuaPluginManager *manager = LuaGamePluginManager();
+		if ( manager )
+			manager->CallCustomEntityHook( "weapon", m_luaDefinition, "OnHolster", entindex() );
+		return BaseClass::Holster( switchingTo );
+	}
+
 	void LuaThink()
 	{
 		SetNextThink( gpGlobals->curtime );
@@ -236,6 +254,7 @@ public:
 			manager->CallCustomEntityHook( "weapon", m_luaDefinition, "OnRemove", entindex() );
 		BaseClass::UpdateOnRemove();
 	}
+
 #else
 	virtual void Spawn()
 	{
@@ -343,6 +362,24 @@ public:
 			manager->CallCustomEntityHook( "npc", m_luaDefinition, "OnRemove", entindex() );
 		BaseClass::UpdateOnRemove();
 	}
+
+	virtual void Touch( CBaseEntity *other )
+	{
+		CLuaPluginManager *manager = LuaGamePluginManager();
+		if ( manager )
+			manager->CallCustomEntityHook( "npc", m_luaDefinition, "Touch", entindex(),
+				-1.0f, other ? other->entindex() : -1 );
+		BaseClass::Touch( other );
+	}
+
+	virtual void Use( CBaseEntity *activator, CBaseEntity *caller, USE_TYPE useType, float value )
+	{
+		CLuaPluginManager *manager = LuaGamePluginManager();
+		if ( manager )
+			manager->CallCustomEntityHook( "npc", m_luaDefinition, "Use", entindex(),
+				-1.0f, activator ? activator->entindex() : -1 );
+		BaseClass::Use( activator, caller, useType, value );
+	}
 #endif
 
 private:
@@ -439,6 +476,24 @@ public:
 		if ( manager )
 			manager->CallCustomEntityHook( "npc", m_luaDefinition, "OnRemove", entindex() );
 		BaseClass::UpdateOnRemove();
+	}
+
+	virtual void Touch( CBaseEntity *other )
+	{
+		CLuaPluginManager *manager = LuaGamePluginManager();
+		if ( manager )
+			manager->CallCustomEntityHook( "npc", m_luaDefinition, "Touch", entindex(),
+				-1.0f, other ? other->entindex() : -1 );
+		BaseClass::Touch( other );
+	}
+
+	virtual void Use( CBaseEntity *activator, CBaseEntity *caller, USE_TYPE useType, float value )
+	{
+		CLuaPluginManager *manager = LuaGamePluginManager();
+		if ( manager )
+			manager->CallCustomEntityHook( "npc", m_luaDefinition, "Use", entindex(),
+				-1.0f, activator ? activator->entindex() : -1 );
+		BaseClass::Use( activator, caller, useType, value );
 	}
 #else
 	virtual void Spawn()
@@ -1795,6 +1850,30 @@ static int LuaPlayerGetButtons( lua_State *state )
 	return 1;
 }
 
+static int LuaPlayerGetMaxSpeed( lua_State *state )
+{
+	CBasePlayer *player = ToBasePlayer( LuaEntityPointer( state, 1 ) );
+	if ( !player ) return 0;
+	lua_pushnumber( state, player->MaxSpeed() );
+	return 1;
+}
+
+static int LuaPlayerSetMaxSpeed( lua_State *state )
+{
+#ifdef CLIENT_DLL
+	(void)state;
+	return luaL_error( state, "player:set_max_speed is server-only" );
+#else
+	CBasePlayer *player = ToBasePlayer( LuaEntityPointer( state, 1 ) );
+	if ( !player ) return 0;
+	float speed = (float)luaL_checknumber( state, 2 );
+	if ( !IsFinite( speed ) || speed < 0.0f )
+		return luaL_error( state, "player:set_max_speed expects a finite non-negative number" );
+	player->SetMaxSpeed( clamp( speed, 0.0f, 4096.0f ) );
+	return 0;
+#endif
+}
+
 static int LuaPlayerIsGrounded( lua_State *state )
 {
 	CBasePlayer *player = ToBasePlayer( LuaEntityPointer( state, 1 ) );
@@ -2457,6 +2536,16 @@ static int LuaNetSend( lua_State *state )
 #endif
 }
 
+static int LuaNetReceive( lua_State *state )
+{
+	CLuaPluginManager *manager = LuaGamePluginManager();
+	const char *name = luaL_checkstring( state, 1 );
+	luaL_checktype( state, 2, LUA_TFUNCTION );
+	if ( !manager || !manager->RegisterNetworkReceiver( state, name, 2 ) )
+		return luaL_error( state, "net.Receive could not register '%s'", name );
+	return 0;
+}
+
 static int LuaNetSendInt( lua_State *state )
 {
 #ifdef CLIENT_DLL
@@ -2738,6 +2827,7 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "Alive",        &LuaPlayerIsAlive },
 		{ "userid",       &LuaPlayerGetUserID },
 		{ "buttons",      &LuaPlayerGetButtons },
+		{ "max_speed",    &LuaPlayerGetMaxSpeed },
 		{ "grounded",     &LuaPlayerIsGrounded },
 		{ "ground_entity", &LuaPlayerGetGroundEntity },
 		{ "vertical_velocity", &LuaPlayerGetVerticalVelocity },
@@ -2759,6 +2849,8 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "SetTeam",      &LuaPlayerSetTeam },
 		{ "Give",         &LuaPlayerGive },
 		{ "IsOnGround",   &LuaPlayerIsGrounded },
+		{ "GetMaxSpeed",  &LuaPlayerGetMaxSpeed },
+		{ "SetMaxSpeed",  &LuaPlayerSetMaxSpeed },
 		{ "GetGroundEntity", &LuaPlayerGetGroundEntity },
 		{ "GetVerticalVelocity", &LuaPlayerGetVerticalVelocity },
 		{ "GetFallSpeed", &LuaPlayerGetFallSpeed },
@@ -2933,6 +3025,7 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "send_float", &LuaNetSendFloat },
 		{ "send_vector", &LuaNetSendVector },
 		{ "send_entity", &LuaNetSendEntity },
+		{ "Receive", &LuaNetReceive },
 		{ "Start", &LuaNetStart },
 		{ "WriteString", &LuaNetWriteString },
 		{ "WriteInt", &LuaNetWriteInt },
@@ -3275,6 +3368,13 @@ void LuaServerPluginClientPutInServer( edict_t *entity, const char *playerName )
 void LuaServerPluginClientDisconnect( edict_t *entity )
 {
 	g_LuaGamePluginSystem.ClientDisconnect( entity );
+}
+
+bool LuaServerPluginPlayerSay( CBaseEntity *player, const char *text )
+{
+	if ( !s_LuaServerManager || !player )
+		return true;
+	return s_LuaServerManager->PlayerSay( player->entindex(), text );
 }
 
 bool LuaServerPluginEntityTakeDamage( CBaseEntity *entity, const CTakeDamageInfo &info )
