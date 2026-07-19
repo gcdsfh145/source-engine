@@ -28,33 +28,6 @@ hook.Add("PlayerSay", "server_example_chat", function(ply, text)
     end
 end)
 
--- Example double jump. The jump counter is reset after landing and the
--- rising-edge check prevents holding the jump button from repeating it.
-local doubleJumpState = {}
-hook.Add("Think", "server_example_double_jump", function()
-    for _, ply in ipairs(player.GetAll()) do
-        if not ply:IsValid() or not ply:Alive() then
-            doubleJumpState[ply:EntIndex()] = nil
-        else
-            local index = ply:EntIndex()
-            local state = doubleJumpState[index] or { jumps = 0, wasPressed = false }
-            if ply:IsOnGround() then
-                state.jumps = 0
-            end
-            local pressed = math.floor(ply:buttons() / 2) % 2 == 1
-            if pressed and not state.wasPressed then
-                if ply:IsOnGround() then
-                    state.jumps = 1
-                elseif state.jumps == 1 and ply:Jump(true, 45) then
-                    state.jumps = 2
-                end
-            end
-            state.wasPressed = pressed
-            doubleJumpState[index] = state
-        end
-    end
-end)
-
 timer.Create("server_example_announce", 60, 0, function()
     plugin.hud.message("Server Lua is running")
 end)

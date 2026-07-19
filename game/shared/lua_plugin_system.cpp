@@ -1841,25 +1841,21 @@ static int LuaPlayerJump( lua_State *state )
 	return luaL_error( state, "player:jump is server-only" );
 #else
 	CBasePlayer *player = ToBasePlayer( LuaEntityPointer( state, 1 ) );
-	bool allowAirJump = lua_toboolean( state, 2 ) != 0;
-	if ( !player || !player->IsAlive() ||
-		( !allowAirJump && player->GetGroundEntity() == NULL ) )
+	if ( !player || !player->IsAlive() || player->GetGroundEntity() == NULL )
 	{
 		lua_pushboolean( state, 0 );
 		return 1;
 	}
 
 	ConVarRef gravity( "sv_gravity", true );
-	bool hasCustomHeight = !lua_isnoneornil( state, 3 );
-	float jumpHeight = (float)luaL_optnumber( state, 3, GAMEMOVEMENT_JUMP_HEIGHT );
+	bool hasCustomHeight = !lua_isnoneornil( state, 2 );
+	float jumpHeight = (float)luaL_optnumber( state, 2, GAMEMOVEMENT_JUMP_HEIGHT );
 	if ( jumpHeight <= 0.0f )
 		return luaL_error( state, "player:jump height must be greater than zero" );
 	float jumpSpeed = hasCustomHeight ?
 		sqrtf( 2.0f * ( gravity.IsValid() ? gravity.GetFloat() : 600.0f ) * jumpHeight ) :
 		GetGameMovementJumpImpulse();
 	Vector velocity = player->GetAbsVelocity();
-	// An air jump is a fresh jump impulse. Using MAX here makes a second jump
-	// weak or invisible when the player is already falling or still rising.
 	velocity.z = jumpSpeed;
 	player->SetGroundEntity( NULL );
 	player->SetAbsVelocity( velocity );

@@ -31,7 +31,6 @@ CSpawnMenu::CSpawnMenu( vgui::VPANEL parent ) : BaseClass( NULL, "SpawnMenu" )
     AddMenuButton( "获取：独立 RPG 手枪", "give weapon_rpgpistol" );
     AddMenuButton( "获取：独立 AR3FIRE", "give weapon_ar3fire" );
     AddMenuButton( "开启：无限弹药", "sv_infinite_ammo 1" );
-    AddMenuButton( "开启：二段跳", "sv_jumpset 2" );
     AddMenuButton( "开启：去除速度限制", "sv_speedinf 1" );
     AddMenuButton( "切换：无敌模式 (God)", "god" );
     AddMenuButton( "切换：穿墙模式 (Noclip)", "noclip" );

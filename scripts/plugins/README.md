@@ -138,21 +138,16 @@ util.PrecacheSound("buttons/button14.wav")
 
 完整可运行的 Mod 小样例见 `scripts/plugins/server/mod_showcase.lua`。
 
-服务端可以让一个在地面的玩家跳跃。第二个参数为 `true` 时允许空中跳跃，
-脚本可以用它实现二段跳；插件需要自己记录每次起跳次数，避免每帧无限跳跃：
+服务端可以让一个在地面的玩家跳跃。空中跳跃被引擎禁止，`player:jump()`
+只能在玩家站在地面时生效：
 
 ```lua
 if p and p:alive() and p:grounded() then
     p:jump()
 end
 
--- 二段跳触发时使用 true，获得完整的第二次跳跃初速度。
-if p and p:alive() and doubleJumpAllowed then
-    p:Jump(true)
-end
-
--- 第三个参数可指定跳跃高度；不传时使用游戏默认高度。
-p:Jump(true, 45)
+-- 可指定跳跃高度；不传时使用游戏默认高度。
+p:Jump(45)
 ```
 
 ## 游戏状态

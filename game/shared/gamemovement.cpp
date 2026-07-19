@@ -2290,9 +2290,6 @@ void CGameMovement::PlaySwimSound()
 }
 
 
-ConVar sv_jumpset( "sv_jumpset", "1", FCVAR_REPLICATED | FCVAR_NOTIFY, "Sets the number of jumps allowed (1 = default, 2 = double jump, etc.)" );
-static int g_nJumpCount = 0;
-
 //-----------------------------------------------------------------------------
 // Purpose: 
 //-----------------------------------------------------------------------------
@@ -2339,24 +2336,9 @@ bool CGameMovement::CheckJumpButton( void )
 	// No more effect
  	if (player->GetGroundEntity() == NULL)
 	{
-		if ( ( mv->m_nButtons & IN_JUMP ) && !( mv->m_nOldButtons & IN_JUMP ) )
-		{
-			// Multi-jump logic: use a static counter for single player
-			if ( g_nJumpCount < sv_jumpset.GetInt() - 1 )
-			{
-				g_nJumpCount++;
-				mv->m_vecVelocity[2] = GetGameMovementJumpImpulse();
-				mv->m_nOldButtons |= IN_JUMP;
-				return true;
-			}
-		}
-
 		mv->m_nOldButtons |= IN_JUMP;
 		return false;		// in air, so no effect
 	}
-
-	// Reset multi-jump counter on ground
-	g_nJumpCount = 0;
 
 	// Don't allow jumping when the player is in a stasis field.
 #ifndef HL2_EPISODIC
