@@ -207,7 +207,8 @@ lua_client_load zombie_crisis_hud.lua
 ```
 
 模式包含普通感染者、Hunter、Smoker、Boomer、Charger、Spitter、Jockey、Witch、Tank，
-动态尸潮、特殊感染者计时、队友血量 HUD、终点判定和最终坚持阶段。不包含安全屋、
+动态尸潮（最多 100 只）、高血量高速感染者、特殊感染者高频刷新、队友血量 HUD、
+终点判定和最终坚持阶段。不包含安全屋、
 语音、友军伤害或倒地救援。
 
 地图可以放置名为 `zombie_crisis_exit` 的 `info_target` 作为终点；没有实体时，

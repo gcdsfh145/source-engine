@@ -1927,6 +1927,40 @@ static int LuaEntitySetPlaybackRate( lua_State *state )
 	return 1;
 }
 
+static int LuaEntitySetGroundSpeed( lua_State *state )
+{
+#ifdef CLIENT_DLL
+	(void)state;
+	return luaL_error( state, "entity:SetGroundSpeed is server-only" );
+#else
+	CBaseAnimating *entity = dynamic_cast< CBaseAnimating * >( LuaEntityPointer( state, 1 ) );
+	float speed = (float)luaL_checknumber( state, 2 );
+	if ( !entity )
+	{
+		lua_pushboolean( state, 0 );
+		return 1;
+	}
+	if ( speed < 0.0f || !IsFinite( speed ) )
+		return luaL_error( state, "entity:SetGroundSpeed expects a finite non-negative speed" );
+	entity->m_flGroundSpeed = clamp( speed, 0.0f, 4096.0f );
+	lua_pushboolean( state, 1 );
+	return 1;
+#endif
+}
+
+static int LuaEntityGetGroundSpeed( lua_State *state )
+{
+#ifdef CLIENT_DLL
+	(void)state;
+	return luaL_error( state, "entity:GetGroundSpeed is server-only" );
+#else
+	CBaseAnimating *entity = dynamic_cast< CBaseAnimating * >( LuaEntityPointer( state, 1 ) );
+	if ( !entity ) return 0;
+	lua_pushnumber( state, entity->m_flGroundSpeed );
+	return 1;
+#endif
+}
+
 #ifndef CLIENT_DLL
 static CAI_BaseNPC *LuaNPCPointer( lua_State *state, int stackIndex )
 {
@@ -3081,6 +3115,8 @@ static void InstallLuaGameBindings( lua_State *state, void *context )
 		{ "SetSequence",  &LuaEntitySetSequence },
 		{ "LookupSequence", &LuaEntityLookupSequence },
 		{ "SetPlaybackRate", &LuaEntitySetPlaybackRate },
+		{ "SetGroundSpeed", &LuaEntitySetGroundSpeed },
+		{ "GetGroundSpeed", &LuaEntityGetGroundSpeed },
 		{ "GetNumBodyGroups", &LuaEntityGetNumBodyGroups },
 		{ "LookupAttachment", &LuaEntityLookupAttachment },
 		{ "GetAttachment", &LuaEntityGetAttachment },

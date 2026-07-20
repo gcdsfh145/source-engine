@@ -37,7 +37,9 @@ local started = false
 local zombies = {}
 local specialByIndex = {}
 local specialNextAttack = {}
+local zombieSpeedByIndex = {}
 local endEntity = nil
+local MAX_ZOMBIES = 100
 
 local commonTypes = {
     "npc_zombie",
@@ -69,14 +71,25 @@ local specialClass = {
 }
 
 local specialHealth = {
-    hunter = 250,
-    smoker = 300,
-    boomer = 180,
-    charger = 500,
-    spitter = 220,
-    jockey = 220,
-    witch = 700,
-    tank = 1400
+    hunter = 450,
+    smoker = 500,
+    boomer = 350,
+    charger = 800,
+    spitter = 420,
+    jockey = 400,
+    witch = 1100,
+    tank = 2200
+}
+
+local specialSpeed = {
+    hunter = 360,
+    smoker = 260,
+    boomer = 210,
+    charger = 330,
+    spitter = 240,
+    jockey = 380,
+    witch = 230,
+    tank = 285
 }
 
 local specialModel = {
@@ -131,6 +144,8 @@ local function countLivingZombies()
         else
             zombies[index] = nil
             specialByIndex[index] = nil
+            specialNextAttack[index] = nil
+            zombieSpeedByIndex[index] = nil
         end
     end
     return count
@@ -213,6 +228,7 @@ local function cleanupZombies()
         zombies[index] = nil
         specialByIndex[index] = nil
         specialNextAttack[index] = nil
+        zombieSpeedByIndex[index] = nil
     end
 end
 
@@ -233,7 +249,12 @@ local function getSpawnPosition()
             return trace.HitPos + Vector(0, 0, 4)
         end
     end
-    return nil
+    -- Keep the director progressing on maps where the downward trace misses
+    -- a usable floor (for example, large skybox sections).
+    local target = players[1]
+    local angle = math.random() * math.pi * 2
+    return target:GetPos() + Vector(math.cos(angle) * 720,
+        math.sin(angle) * 720, 16)
 end
 
 local function pickTarget(ent)
@@ -259,10 +280,14 @@ local function spawnZombie(classname, kind)
     })
     if not ent then return nil end
 
-    zombies[ent:EntIndex()] = ent
+    local index = ent:EntIndex()
+    zombies[index] = ent
+    local speed = kind and (specialSpeed[kind] or 260) or (270 + wave * 8)
+    zombieSpeedByIndex[index] = speed
+    ent:SetGroundSpeed(speed)
     if kind then
-        specialByIndex[ent:EntIndex()] = kind
-        specialNextAttack[ent:EntIndex()] = 0
+        specialByIndex[index] = kind
+        specialNextAttack[index] = 0
         ent:SetHealth(specialHealth[kind] or 250)
         ent:SetMaxHealth(specialHealth[kind] or 250)
         ent:SetName("zombie_crisis_" .. kind)
@@ -283,7 +308,12 @@ end
 local function spawnCommon(amount)
     for i = 1, amount do
         local class = commonTypes[math.random(1, #commonTypes)]
-        spawnZombie(class)
+        local ent = spawnZombie(class)
+        if ent then
+            local health = 220 + wave * 18
+            ent:SetMaxHealth(health)
+            ent:SetHealth(health)
+        end
     end
 end
 
@@ -429,7 +459,7 @@ hook.Add("Think", "zombie_crisis_director", function()
         return
     end
 
-    local maxAlive = 8 + #players * 5 + wave * 2
+    local maxAlive = math.min(MAX_ZOMBIES, 24 + #players * 16 + wave * 5)
     local living = countLivingZombies()
     if now >= nextCommonSpawn and living < maxAlive then
         local amount = math.min(3 + wave, maxAlive - living)
@@ -445,7 +475,7 @@ hook.Add("Think", "zombie_crisis_director", function()
 
     if now >= nextSpecialSpawn and living < maxAlive then
         spawnSpecial()
-        nextSpecialSpawn = now + math.max(20, 55 - wave * 2)
+        nextSpecialSpawn = now + math.max(8, 24 - wave * 2)
     end
 
     for index, ent in pairs(zombies) do
@@ -453,7 +483,9 @@ hook.Add("Think", "zombie_crisis_director", function()
             zombies[index] = nil
             specialByIndex[index] = nil
             specialNextAttack[index] = nil
+            zombieSpeedByIndex[index] = nil
         else
+            ent:SetGroundSpeed(zombieSpeedByIndex[index] or (270 + wave * 8))
             local kind = specialByIndex[index]
             if kind then updateSpecial(ent, kind, now) end
         end
