@@ -207,7 +207,7 @@ lua_client_load zombie_crisis_hud.lua
 ```
 
 模式包含普通感染者、Hunter、Smoker、Boomer、Charger、Spitter、Jockey、Witch、Tank，
-动态尸潮（最多 100 只）、高血量高速感染者、特殊感染者高频刷新、队友血量 HUD、
+动态尸潮（最多 100 只）、基础 150 HP 的高速感染者、每 30 秒一个特殊感染者、队友血量 HUD、
 终点判定和最终坚持阶段。不包含安全屋、
 语音、友军伤害或倒地救援。
 

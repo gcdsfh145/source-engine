@@ -239,7 +239,9 @@ local function getSpawnPosition()
     for attempt = 1, 12 do
         local target = players[math.random(1, #players)]
         local angle = math.random() * math.pi * 2
-        local distance = math.random(700, 1100)
+        -- Spawn near a living player, but far enough away to avoid appearing
+        -- directly inside the player's view.
+        local distance = math.random(500, 850)
         local start = target:GetPos() + Vector(math.cos(angle) * distance,
             math.sin(angle) * distance, 256)
         local finish = start - Vector(0, 0, 768)
@@ -253,8 +255,8 @@ local function getSpawnPosition()
     -- a usable floor (for example, large skybox sections).
     local target = players[1]
     local angle = math.random() * math.pi * 2
-    return target:GetPos() + Vector(math.cos(angle) * 720,
-        math.sin(angle) * 720, 16)
+    return target:GetPos() + Vector(math.cos(angle) * 600,
+        math.sin(angle) * 600, 16)
 end
 
 local function pickTarget(ent)
@@ -310,7 +312,7 @@ local function spawnCommon(amount)
         local class = commonTypes[math.random(1, #commonTypes)]
         local ent = spawnZombie(class)
         if ent then
-            local health = 220 + wave * 18
+            local health = 150
             ent:SetMaxHealth(health)
             ent:SetHealth(health)
         end
@@ -335,7 +337,7 @@ local function startGame()
     wave = 1
     waveEndsAt = plugin.game.time() + 45
     nextCommonSpawn = plugin.game.time() + 2
-    nextSpecialSpawn = plugin.game.time() + 12
+    nextSpecialSpawn = plugin.game.time() + 30
     findGoal()
     for _, ply in ipairs(players) do
         ply:Give("weapon_smg1")
@@ -462,9 +464,9 @@ hook.Add("Think", "zombie_crisis_director", function()
     local maxAlive = math.min(MAX_ZOMBIES, 24 + #players * 16 + wave * 5)
     local living = countLivingZombies()
     if now >= nextCommonSpawn and living < maxAlive then
-        local amount = math.min(3 + wave, maxAlive - living)
-        spawnCommon(amount)
-        nextCommonSpawn = now + (mode == MODE_FINALE and 1.0 or 2.5)
+        -- One infected per interval prevents a visible row/burst of NPCs.
+        spawnCommon(1)
+        nextCommonSpawn = now + (mode == MODE_FINALE and 0.75 or 1.0)
     end
 
     if now >= waveEndsAt then
@@ -473,9 +475,11 @@ hook.Add("Think", "zombie_crisis_director", function()
         announce("Horde wave " .. tostring(wave) .. " started.")
     end
 
-    if now >= nextSpecialSpawn and living < maxAlive then
-        spawnSpecial()
-        nextSpecialSpawn = now + math.max(8, 24 - wave * 2)
+    if now >= nextSpecialSpawn then
+        if living < maxAlive then
+            spawnSpecial()
+        end
+        nextSpecialSpawn = now + 30
     end
 
     for index, ent in pairs(zombies) do
