@@ -179,7 +179,7 @@ local function sendStatus()
     -- Direction is sent per player so each client gets a useful compass hint.
     for _, receiver in ipairs(players) do
         local delta = goal - receiver:GetPos()
-        local distance = delta:Length()
+        local distance = plugin.vector.length(delta)
         local targetYaw = math.deg(math.atan2(delta.y, delta.x))
         local playerYaw = receiver:EyeAngles().y
         local heading = targetYaw - playerYaw
